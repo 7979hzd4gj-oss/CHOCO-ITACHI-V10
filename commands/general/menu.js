@@ -1,9 +1,10 @@
 import moment from 'moment-timezone';
 
-const menuCommand = {
+export default {
   name: "menu",
   alias: ["help", "allmenu", "list"],
   category: "GENERAL",
+  desc: "Menu complet",
   async execute(sock, m, args) {
     const from = m.key.remoteJid;
     const time = moment.tz("Africa/Conakry").format("HH:mm:ss");
@@ -11,6 +12,8 @@ const menuCommand = {
     const uptime = process.uptime();
     const hours = Math.floor(uptime / 3600);
     const minutes = Math.floor((uptime % 3600) / 60);
+
+    const myPhoto = "https://files.catbox.moe/mdjjdg.jpeg";
 
     const menuText = `\`\`\`
 ┏━━━━━━━━━━━━━━━━━━━━━┓
@@ -303,11 +306,12 @@ const menuCommand = {
 ║ .screenshot            ║
 ╚═══════════════════════╝
 \`\`\`
-*CHOCO ITACHI V10* | *Dev: Choco | V10 FINAL*
+*CHOCO ITACHI V10* | Dev: Choco
 `;
 
-    await sock.sendMessage(from, { text: menuText }, { quoted: m });
+    await sock.sendMessage(from, {
+      image: { url: myPhoto },
+      caption: menuText
+    }, { quoted: m });
   }
 };
-
-export default menuCommand;
