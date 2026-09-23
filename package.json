@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
+    "moment-timezone": "^0.5.45"
   }
 }
