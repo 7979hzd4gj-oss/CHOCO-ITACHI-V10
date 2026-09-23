@@ -1,13 +1,22 @@
 import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 import P from "pino";
+import express from "express";
+import config from "./config.js";
+import { loadCommands } from "./lib/commandLoader.js";
 
-const MY_NUMBER = "224611257942"; // TON NUMERO EST DEJA DEDANS
-const BOT_NAME = "CHOCO ITACHI V10";
-const PREFIX = ".";
+const MY_NUMBER = config.ownerNumber || "224611257942";
+const BOT_NAME = config.botName || "CHOCO-LEGENDE-V10";
+const PREFIX = config.prefix || ".";
+
+// Serveur pour Render (obligatoire)
+const app = express();
+app.get("/", (req,res)=> res.send(`${BOT_NAME} ONLINE - ${MY_NUMBER} - ${new Date().toLocaleString()}`));
+app.listen(process.env.PORT || 3000, ()=> console.log("✅ Web server OK"));
 
 async function startBot(){
   const { state, saveCreds } = await useMultiFileAuthState("./auth_info");
   const { version } = await fetchLatestBaileysVersion();
+  const commands = await loadCommands();
 
   const sock = makeWASocket({
     version,
@@ -18,17 +27,18 @@ async function startBot(){
 
   sock.ev.on("creds.update", saveCreds);
 
-  // CODE PAIRING POUR 224611257942
+  // CODE PAIRING pour 224611257942
   if(!sock.authState.creds.registered){
     setTimeout(async () => {
       try{
         const code = await sock.requestPairingCode(MY_NUMBER);
         console.log("\n==========================================");
+        console.log(` BOT: ${BOT_NAME}`);
         console.log(` NUMERO: ${MY_NUMBER}`);
         console.log(` CODE: ${code}`);
-        console.log(` WhatsApp > Appareils liés > Lier avec numéro`);
+        console.log(` Va sur WhatsApp > Appareils liés > Lier avec numéro`);
         console.log("==========================================\n");
-      }catch(e){ console.error(e); }
+      }catch(e){ console.error("Erreur pairing:", e.message); }
     }, 5000);
   }
 
@@ -39,22 +49,29 @@ async function startBot(){
     if(connection === "close"){
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut;
       if(shouldReconnect) setTimeout(startBot, 3000);
-      else console.log("❌ Session terminée. Supprime auth_info");
+      else console.log("❌ Session terminée. Supprime auth_info et relance");
     }
   });
 
   sock.ev.on("messages.upsert", async ({messages}) => {
     const m = messages?.[0];
     if(!m?.message || m.key.fromMe) return;
-    const text = m.message.conversation || m.message.extendedTextMessage?.text || "";
 
-    if(text.trim() === ".menu"){
-      await sock.sendMessage(m.key.remoteJid, {
-        text: `👑 *${BOT_NAME}*\n✅ Connecté sur ${MY_NUMBER}\n\n*.menu* - ce menu\n*.ping* - vitesse\n\nTon bot marche chef!`
-      }, {quoted: m});
-    }
-    if(text.trim() === ".ping"){
-      await sock.sendMessage(m.key.remoteJid, {text: "⚡ Pong! Bot en ligne"}, {quoted: m});
+    const text = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
+    if(!text.startsWith(PREFIX)) return;
+
+    const args = text.slice(PREFIX.length).trim().split(/ +/);
+    const cmdName = args.shift()?.toLowerCase();
+    if(!cmdName) return;
+
+    const command = commands.get(cmdName);
+    if(!command) return;
+
+    try{
+      await command.execute(sock, m, args, { commands, MY_NUMBER, BOT_NAME, PREFIX, config });
+    }catch(e){
+      console.error(`Erreur commande ${cmdName}:`, e);
+      await sock.sendMessage(m.key.remoteJid, { text: `❌ Erreur: ${e.message}` }, { quoted: m });
     }
   });
 }
