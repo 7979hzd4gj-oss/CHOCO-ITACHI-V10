@@ -11,7 +11,7 @@ async function startBot(){
  const sock=makeWASocket({version,auth:state,logger:P({level:"silent"}),browser:[config.botName,"Chrome","1.0.0"]});
  sock.ev.on("creds.update",saveCreds);
  sock.ev.on("connection.update",({connection,lastDisconnect})=>{
-  if(connection==="open") console.log(`✅ ${config.botName} est connecté !`);
+  if(connection==="open") console.log(`✅ ${config.botName} est connecté!`);
   if(connection==="close"){
    const code=lastDisconnect?.error?.output?.statusCode;
    if(code!==DisconnectReason.loggedOut) setTimeout(startBot,3000);
