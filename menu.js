@@ -19,7 +19,7 @@ const menuCommand = {
 ┃ 📅 ${date} | ⏰ ${time} ┃
 ┃ ⚡ Uptime: ${hours}h ${minutes}m ┃
 ┗━━━━━━━━━━━━━━━━━━━━━┛
-══════════╝
+
 ╔══════〔 GENERAL 〕══════╗
 ║ .menu                  ║
 ║ .help                  ║
