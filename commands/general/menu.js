@@ -12,15 +12,15 @@ const menuCommand = {
     const hours = Math.floor(uptime / 3600);
     const minutes = Math.floor((uptime % 3600) / 60);
 
-    const menuText = `
+    const menuText = `\`\`\`
 ┏━━━━━━━━━━━━━━━━━━━━━┓
-┃ 👑 CHOCO ITACHI V10 👑 ┃
-┃ 🔥 261 COMMANDES 🔥  ┃
-┃ 📅 ${date} | ⏰ ${time} ┃
-┃ ⚡ Uptime: ${hours}h ${minutes}m ┃
+┃ CHOCO ITACHI V10    ┃
+┃ 261 COMMANDES       ┃
+┃ ${date} | ${time}  ┃
+┃ Uptime: ${hours}h ${minutes}m       ┃
 ┗━━━━━━━━━━━━━━━━━━━━━┛
 
-╔══════〔 GENERAL 〕══════╗
+╔══════[ GENERAL ]══════╗
 ║ .menu                  ║
 ║ .help                  ║
 ║ .ping                  ║
@@ -52,7 +52,7 @@ const menuCommand = {
 ║ .attp                  ║
 ╚═══════════════════════╝
 
-╔══════〔 ADMIN 〕══════╗
+╔══════[ ADMIN ]══════╗
 ║ .open                  ║
 ║ .close                 ║
 ║ .ban                   ║
@@ -90,7 +90,7 @@ const menuCommand = {
 ║ .setgoodbye            ║
 ╚═══════════════════════╝
 
-╔══════〔 PROTECTION ⭐ 〕══════╗
+╔══════[ PROTECTION ]══════╗
 ║ .antilink              ║
 ║ .antibadword           ║
 ║ .antibot               ║
@@ -115,7 +115,7 @@ const menuCommand = {
 ║ .antichannel           ║
 ╚═══════════════════════╝
 
-╔══════〔 GROUP 〕══════╗
+╔══════[ GROUP ]══════╗
 ║ .group                 ║
 ║ .setdesc               ║
 ║ .setsubject            ║
@@ -147,7 +147,7 @@ const menuCommand = {
 ║ .announce              ║
 ╚═══════════════════════╝
 
-╔══════〔 DOWNLOAD 〕══════╗
+╔══════[ DOWNLOAD ]══════╗
 ║ .play                  ║
 ║ .song                  ║
 ║ .video                 ║
@@ -178,7 +178,7 @@ const menuCommand = {
 ║ .viewonce              ║
 ╚═══════════════════════╝
 
-╔══════〔 FUN 😂 〕══════╗
+╔══════[ FUN ]══════╗
 ║ .meme                  ║
 ║ .gif                   ║
 ║ .sticker               ║
@@ -205,7 +205,7 @@ const menuCommand = {
 ║ .slot                  ║
 ╚═══════════════════════╝
 
-╔══════〔 STICKER 〕══════╗
+╔══════[ STICKER ]══════╗
 ║ .sticker               ║
 ║ .s                     ║
 ║ .stiker                ║
@@ -223,7 +223,7 @@ const menuCommand = {
 ║ .attp                  ║
 ╚═══════════════════════╝
 
-╔══════〔 SEARCH 🔎 〕══════╗
+╔══════[ SEARCH ]══════╗
 ║ .google                ║
 ║ .search                ║
 ║ .ytsearch              ║
@@ -242,7 +242,7 @@ const menuCommand = {
 ║ .manga                 ║
 ╚═══════════════════════╝
 
-╔══════〔 IA 🤖 〕══════╗
+╔══════[ IA ]══════╗
 ║ .ai                    ║
 ║ .gpt                   ║
 ║ .chat                  ║
@@ -259,7 +259,7 @@ const menuCommand = {
 ║ .question              ║
 ╚═══════════════════════╝
 
-╔══════〔 OWNER 👑 〕══════╗
+╔══════[ OWNER ]══════╗
 ║ .eval                  ║
 ║ .exec                  ║
 ║ .shell                 ║
@@ -283,7 +283,7 @@ const menuCommand = {
 ║ .clearsession          ║
 ╚═══════════════════════╝
 
-╔══════〔 UTILITIES 🛠️ 〕══════╗
+╔══════[ UTILITIES ]══════╗
 ║ .calc                  ║
 ║ .time                  ║
 ║ .date                  ║
@@ -302,11 +302,8 @@ const menuCommand = {
 ║ .hash                  ║
 ║ .screenshot            ║
 ╚═══════════════════════╝
-
-┏━━━━━━━━━━━━━━━━━━━━━┓
-┃ 👑 CHOCO ITACHI V10 😈 ┃
-┃ Dev: Choco | V10 FINAL ┃
-┗━━━━━━━━━━━━━━━━━━━━━┛
+\`\`\`
+*CHOCO ITACHI V10* | *Dev: Choco | V10 FINAL*
 `;
 
     await sock.sendMessage(from, { text: menuText }, { quoted: m });
