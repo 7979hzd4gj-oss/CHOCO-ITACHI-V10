@@ -1,6 +1,15 @@
-"dependencies": {
-  "@whiskeysockets/baileys": "latest",
-  "pino": "latest",
-  "express": "latest",
-  "moment-timezone": "latest"
+{
+  "name": "choco-itachi-v10",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.8",
+    "pino": "^8.19.0",
+    "express": "^4.19.2",
+    "moment-timezone": "^0.5.45",
+    "qrcode-terminal": "^0.12.0"
+  }
 }
