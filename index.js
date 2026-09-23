@@ -76,4 +76,49 @@ async function startBot(){
   });
 }
 
-startBot();
+startBot();// Mets ça dans ton sock.ev.on('messages.upsert')
+const MARABOU_WORDS = [
+  "marabout", "marabou", "voyant", "voyance",
+  "retour affectif", "retour d'affection", "retour d amour",
+  "portefeuille magique", "porte monnaie magique", "multiplication d'argent",
+  "grand maître", "maitre marabout", "puissant marabout",
+  "rituel", "envoûtement", "désenvoûtement",
+  "whatsapp.*\\+229", "whatsapp.*\\+228", "consultation gratuite",
+  "travail efficace", "satisfaction garantie", "100% garanti"
+];
+
+export async function antiMarabouHandler(sock, m) {
+  try {
+    const from = m.key.remoteJid;
+    if (!from.endsWith("@g.us")) return;
+
+    const db = global.db?.[from];
+    if (!db?.antimarabou) return;
+
+    const body = (m.message?.conversation || m.message?.extendedTextMessage?.text || m.message?.imageMessage?.caption || "").toLowerCase();
+    if (!body) return;
+
+    const isMarabou = MARABOU_WORDS.some(word => {
+      const regex = new RegExp(word, "i");
+      return regex.test(body);
+    });
+
+    if (isMarabou) {
+      // Supprime le message
+      await sock.sendMessage(from, {
+        delete: {
+          remoteJid: from,
+          fromMe: false,
+          id: m.key.id,
+          participant: m.key.participant
+        }
+      });
+
+      // Avertit
+      await sock.sendMessage(from, {
+        text: `🔮❌ *ANTI-MARABOU*\n\n@${m.key.participant.split("@")[0]} ton message de maraboutage a été supprimé! Pas de pub ici!`,
+        mentions: [m.key.participant]
+      });
+    }
+  } catch(e) {}
+}
