@@ -1,6 +1,8 @@
 import makeWASocket, { useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys"
 import config from "./config.js"
 import P from "pino"
+import http from "http"
+http.createServer((req,res)=>res.end("CHOCO-ITACHI-V10 Live 🥷")).listen(process.env.PORT||3000)
 
 const prefix = config.PREFIX || "."
 
@@ -265,8 +267,8 @@ async function startBot() {
 4. Entre le code affiché
 
 📤 *Partager le bot:*
-• Envoie ce repo à tes amis: github.com/7979hzd4gj-oss/CHOCO-ITACHI-V10
-• Ils peuvent forker et déployer
+- Envoie ce repo à tes amis: github.com/7979hzd4gj-oss/CHOCO-ITACHI-V10
+- Ils peuvent forker et déployer
 
 👤 Owner: ${config.OWNER_NUMBER}
 🥷 Bot: CHOCO-ITACHI-V10 v10
