@@ -9,15 +9,18 @@ import moment from "moment-timezone"
 
 const prefix = config.PREFIX || "."
 let sockGlobal = null
+let isPairing = false
+global.db = global.db || {}
 
 async function startBot() {
+  if(isPairing) return
   try {
-    try { if (!fs.existsSync("session")) fs.mkdirSync("session") } catch {}
+    if (!fs.existsSync("session")) fs.mkdirSync("session")
     const { state, saveCreds } = await useMultiFileAuthState("session")
     const sock = makeWASocket({
       auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" })) },
       logger: P({ level: "silent" }),
-      browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"],
+      browser: ["CHOCO-V10", "Chrome", "10.0.0"],
       printQRInTerminal: false,
       syncFullHistory: false
     })
@@ -27,9 +30,9 @@ async function startBot() {
       if (u.connection === "close") {
         let reason = u.lastDisconnect?.error?.output?.statusCode
         if (reason === DisconnectReason.loggedOut) { try { fs.rmSync("session", { recursive: true, force: true }) } catch {} }
-        if (reason!== DisconnectReason.loggedOut) setTimeout(startBot, 3000)
+        if (reason!== DisconnectReason.loggedOut &&!isPairing) setTimeout(startBot, 3000)
       }
-      if (u.connection === "open") console.log("✅ CHOCO-ITACHI-V10 Connecté!")
+      if (u.connection === "open") console.log("✅ CHOCO-V10 Connecté!")
     })
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
@@ -37,7 +40,38 @@ async function startBot() {
         const m = messages[0]
         if (!m.message || m.key.fromMe) return
         const from = m.key.remoteJid
-        const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || ""
+        global.db[from] = global.db[from] || {}
+        const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || m.message.videoMessage?.caption || ""
+        const isGroup = from.endsWith("@g.us")
+
+        // ===== VV VV1 VV2 =====
+        if (body.startsWith(prefix)) {
+          const tmpArgs = body.slice(prefix.length).trim().split(/ +/)
+          const tmpCmd = tmpArgs[0].toLowerCase()
+          if (["vv","vv1","vv2","viewonce"].includes(tmpCmd)) {
+            const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage
+            if (!quoted) return sock.sendMessage(from, { text: "❌ Réponds à une vue unique avec *.vv*" }, { quoted: m })
+            let inner = quoted.viewOnceMessageV2 || quoted.viewOnceMessage || quoted
+            inner = inner.message || inner
+            if (inner.imageMessage) {
+              return await sock.sendMessage(from, { image: inner.imageMessage, caption: "✅ *VV récupéré par CHOCO-V10* 🥷" }, { quoted: m })
+            } else if (inner.videoMessage) {
+              return await sock.sendMessage(from, { video: inner.videoMessage, caption: "✅ *VV récupéré par CHOCO-V10* 🥷" }, { quoted: m })
+            } else {
+              return sock.sendMessage(from, { text: "❌ Pas de VV trouvé" }, { quoted: m })
+            }
+          }
+          if (tmpCmd === "reponda") {
+            if (!tmpArgs[1]) return sock.sendMessage(from, { text: `*REPONDA*\nActuel: ${global.db[from].reponda? "✅ ON" : "❌ OFF"}\nFais:.reponda on / off` }, { quoted: m })
+            global.db[from].reponda = tmpArgs[1].toLowerCase() === "on"
+            return sock.sendMessage(from, { text: `✅ *REPONDA ${global.db[from].reponda? "ACTIVÉ" : "DÉSACTIVÉ"}*` }, { quoted: m })
+          }
+        }
+
+        if (global.db[from].reponda &&!body.startsWith(prefix) &&!isGroup) {
+          return sock.sendMessage(from, { text: `🥷 Oui chef ${config.ownerName}? Je suis là! Tape *.menu* 🍫` }, { quoted: m })
+        }
+
         if (!body.startsWith(prefix)) return
         const args = body.slice(prefix.length).trim().split(/ +/)
         const command = args.shift().toLowerCase()
@@ -53,7 +87,7 @@ async function startBot() {
 ║╭─────────────◆
 ║│ 🇬🇳 ${date} | ${time}
 ║│ ⏱️ Uptime: ${h}h ${mi}m
-║│ 👤 Dev: ${config.ownerName || "CHOCO"}
+║│ 👤 Dev: ${config.ownerName}
 ║╰─────────────◆
 ╚══════════════════❒
 🥷 𝗟𝗜𝗦𝗧𝗘 𝗗𝗘𝗦 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗘𝗦
@@ -136,6 +170,14 @@ async function startBot() {
 ║ ⿻.antidelete → anti-suppre
 ║ ⿻.antipurge → anti-purge abusive
 ║ ⿻.antimarabout → anti-arnaques
+║ ⿻.antifake → anti-fake
+║ ⿻.antivv → anti-viewonce
+║ ⿻.antiflood → anti-flood
+║ ⿻.antivoice → anti-vocal
+║ ⿻.antifile → anti-fichier
+║ ⿻.antishare → anti-partage
+║ ⿻.antiedit → anti-edit
+║ ⿻.antichannel → anti-channel
 ╚══════════════════❒
 ╔══════════════════🥷
 ║ ❍ 𝗢𝗪𝗡𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
@@ -145,6 +187,7 @@ async function startBot() {
 ║ ⿻.listsudo → lister sudo
 ║ ⿻.delsudo → retirer sudo
 ║ ⿻.pair → code connexion
+║ ⿻.prompt → comportement IA
 ║ ⿻.autoviewstatus → vue statuts
 ║ ⿻.autoreactstatus → reagir
 ║ ⿻.autostatus → statut auto
@@ -154,16 +197,21 @@ async function startBot() {
 ║ ⿻.cleartmp → vider tmp
 ║ ⿻.update → mettre a jour
 ║ ⿻.settings → parametres
+║ ⿻.anticall → bloquer appels
 ║ ⿻.pmblocker → bloquer mp
 ║ ⿻.setpp → photo profil bot
 ║ ⿻.setmenuimage → image menu
+║ ⿻.menustyle → style menu
 ║ ⿻.autobio → bio automatique
+║ ⿻.maintenance → mode mtc
+║ ⿻.reponda → auto-reponse
 ╚══════════════════❒
 ╔══════════════════🥷
 ║ ❍ 𝗘𝗗𝗜𝗧𝗜𝗡𝗚-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.sticker → creer sticker
 ║ ⿻.stickersearch → chrch stickers
 ║ ⿻.toimage → sticker image
+║ ⿻.simage → sticker image
 ║ ⿻.take → modifier sticker
 ║ ⿻.waouh → capturer media discret
 ║ ⿻.image → generer image
@@ -173,16 +221,28 @@ async function startBot() {
 ║ ⿻.crop → recadrer image
 ║ ⿻.meme → creer meme
 ║ ⿻.emojimix → mixer emojis
+║ ⿻.igs → story instagram
+║ ⿻.igsc → commentaires IG
 ╚══════════════════❒
 ╔══════════════════🥷
 ║ ❍ 𝗔𝗜 & 𝗚𝗔𝗠𝗘𝗦-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.ai → intelligence IA
 ║ ⿻.gpt → ChatGPT
 ║ ⿻.gemini → IA Gemini
+║ ⿻.claude → Claude AI
+║ ⿻.deepseek → DeepSeek AI
+║ ⿻.lovable → assistant UI/UX
+║ ⿻.copilot → assistant code
+║ ⿻.codeai → generer code IA
 ║ ⿻.imagine → image IA
+║ ⿻.flux → image flux
+║ ⿻.sora → video IA
 ║ ⿻.tictactoe → jeu morpion
+║ ⿻.hangman → jeu pendu
+║ ⿻.trivia → quiz culture
 ║ ⿻.truth → verite
 ║ ⿻.dare → action
+║ ⿻.drague → phrases de drague
 ╚══════════════════❒
 ╔══════════════════🥷
 ║ ❍ 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
@@ -193,16 +253,42 @@ async function startBot() {
 ║ ⿻.instagram → telecharger IG
 ║ ⿻.facebook → telecharger FB
 ║ ⿻.tiktok → telecharger TikTok
+║ ⿻.vv → voir viewonce
+║ ⿻.vv1 → voir viewonce 1
+║ ⿻.vv2 → voir viewonce 2
+║ ⿻.lyrics → paroles musique
+╚══════════════════❒
+╔══════════════════🥷
+║ ❍ 𝗧𝗘𝗫𝗧𝗠𝗔𝗞𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
+║ ⿻.neon → texte neon
+║ ⿻.glitch → texte glitch
+║ ⿻.fire → texte feu
+║ ⿻.ice → texte glace
+║ ⿻.snow → texte neige
+║ ⿻.matrix → texte matrix
+║ ⿻.hacker → style hacker
+║ ⿻.devil → style demon
+║ ⿻.sand → texte sable
+╚══════════════════❒
+╔══════════════════🥷
+║ ❍ 𝗦𝗬𝗦𝗧𝗘𝗠-𝗖𝗛𝗢𝗖𝗢 ❍
+║ ⿻.git → info git
+║ ⿻.github → lien github
+║ ⿻.sc → code source
+║ ⿻.repo → depot bot
+║ ⿻.script → script bot
+║ ⿻.meta → infos Meta/WhatsApp
+║ ⿻.footballnews → actus football
+║ ⿻.itachi-info → histoire Itachi
 ╚══════════════════❒
 🥷══════════════════🥷
-  propulsé par CHOCO™️ 😈🍫 V10
-🥷══════════════════🥷`
-
-          try {
-            await sock.sendMessage(from, { image: { url: config.BOT_PIC }, caption: menuText }, { quoted: m })
-          } catch {
+  propulsé par *𝗖𝗛𝗢𝗖𝗢™️* 😈🍫 V10
+  261 COMMANDES ACTIVES
+🥷══════════════════🥷
+`;
+          await sock.sendMessage(from, { image: { url: config.BOT_PIC }, caption: menuText }, { quoted: m }).catch(async () => {
             await sock.sendMessage(from, { text: menuText }, { quoted: m })
-          }
+          })
         }
       } catch (e) { console.log(e) }
     })
@@ -212,34 +298,44 @@ async function startBot() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   if (url.pathname === "/clear") {
+    isPairing = true
+    try { if(sockGlobal) { sockGlobal.ev.removeAllListeners(); try{ sockGlobal.end() } catch{} } } catch{}
+    await new Promise(r => setTimeout(r, 1000))
     try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
-    sockGlobal = null; setTimeout(startBot, 1000)
+    sockGlobal = null; isPairing = false; setTimeout(startBot, 1500)
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
     return res.end(JSON.stringify({ ok: true }))
   }
   if (url.pathname === "/pair") {
+    isPairing = true
+    try { if(sockGlobal) { try{ sockGlobal.ev.removeAllListeners(); sockGlobal.end() } catch{} } } catch{}
+    await new Promise(r => setTimeout(r, 1500))
+    try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
+    await new Promise(r => setTimeout(r, 1000))
+    if (!fs.existsSync("session")) fs.mkdirSync("session")
     const number = url.searchParams.get("number")?.replace(/[^0-9]/g, "")
     if (!number) { res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }); return res.end(JSON.stringify({ error: "Numero manquant" })) }
     try {
-      try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
-      try { if (!fs.existsSync("session")) fs.mkdirSync("session") } catch {}
       const { state, saveCreds } = await useMultiFileAuthState("session")
       const sock = makeWASocket({
         auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" })) },
-        logger: P({ level: "silent" }), browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"], printQRInTerminal: false
+        logger: P({ level: "silent" }), browser: ["Chrome", "Chrome", "110"], printQRInTerminal: false
       })
-      sock.ev.on("creds.update", saveCreds); sockGlobal = sock
-      await new Promise(r => setTimeout(r, 2000))
+      sock.ev.on("creds.update", saveCreds)
+      await new Promise(r => setTimeout(r, 3000))
       const code = await sock.requestPairingCode(number)
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ code }))
+      res.end(JSON.stringify({ code }))
+      setTimeout(() => { try{ sock.end() } catch{}; isPairing = false; startBot() }, 60000)
+      return
     } catch (e) {
+      isPairing = false
       res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       return res.end(JSON.stringify({ error: e.message }))
     }
   }
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
-  res.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;background:#2a2a2a;color:#fff;text-align:center}button{background:#ff0000;color:#fff;border:none;padding:14px;border-radius:10px;width:95%}#code{font-size:32px;color:#00ff88;margin:20px 0}</style></head><body><div class="card"><h1>🥷 CHOCO-V10</h1><input id="num" value="224611257942"><button onclick="gen()">GENERER</button><div id="code"></div><div id="msg"></div></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');document.getElementById('code').innerText='...';let r=await fetch('/pair?number='+n);let j=await r.json();document.getElementById('code').innerText=j.code||j.error}</script></body></html>`)
+  res.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;border:1px solid #222}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;background:#2a2a2a;color:#fff;text-align:center}button{background:#ff0000;color:#fff;border:none;padding:14px;border-radius:10px;width:95%;font-weight:bold;cursor:pointer}#code{font-size:32px;color:#00ff88;margin:20px 0;font-weight:bold;letter-spacing:3px}#msg{color:#ffaa00;font-size:13px;margin-top:10px}</style></head><body><div class="card"><h1>🥷 CHOCO-V10</h1><p>Site officiel de connexion</p><input id="num" value="224611257942"><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');document.getElementById('code').innerText='...';document.getElementById('msg').innerText='Patiente 5 sec...';try{let clr=await fetch('/clear');await new Promise(r=>setTimeout(r,2000));let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='Code genere!'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('msg').innerText=e.message}}</script></body></html>`)
 })
 server.listen(process.env.PORT || 10000, () => console.log("Serveur ouvert"))
 startBot()
