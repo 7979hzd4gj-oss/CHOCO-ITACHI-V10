@@ -34,11 +34,10 @@ async function startBot() {
     const args = body.slice(prefix.length).trim().split(/ +/)
     const command = args.shift().toLowerCase()
 
-    // MENU COMPLET - COPIE IBSACKO - TOUT EN UN BLOC
     if (command === "menu" || command === "allmenu" || command === "help") {
       let sec = process.uptime()
-      let h = Math.floor(sec/3600)
-      let mi = Math.floor((sec%3600)/60)
+      let h = Math.floor(sec / 3600)
+      let mi = Math.floor((sec % 3600) / 60)
       let up = `${h}h ${mi}m`
 
       let menu = `╔═〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
@@ -252,7 +251,7 @@ async function startBot() {
     }
 
     if (command === "ping") {
-      await sock.sendMessage(from, { text: `⚡ Vitesse: Rapide\nPong! CHOCO-ITACHI-V10 est actif 🥷` }, { quoted: m })
+      await sock.sendMessage(from, { text: `⚡ Rapide\nPong! CHOCO-ITACHI-V10 actif 🥷` }, { quoted: m })
     }
   })
 }
