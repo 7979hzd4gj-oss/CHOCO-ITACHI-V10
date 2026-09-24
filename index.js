@@ -20,7 +20,7 @@ async function startBot() {
     const sock = makeWASocket({
       auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" })) },
       logger: P({ level: "silent" }),
-      browser: ["CHOCO-V10", "Chrome", "10.0.0"],
+      browser: ["Ubuntu", "Chrome", "20.0.02"],
       printQRInTerminal: false,
       syncFullHistory: false
     })
@@ -44,19 +44,20 @@ async function startBot() {
         const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || m.message.videoMessage?.caption || ""
         const isGroup = from.endsWith("@g.us")
 
-        // ===== VV VV1 VV2 =====
         if (body.startsWith(prefix)) {
           const tmpArgs = body.slice(prefix.length).trim().split(/ +/)
           const tmpCmd = tmpArgs[0].toLowerCase()
           if (["vv","vv1","vv2","viewonce"].includes(tmpCmd)) {
             const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage
             if (!quoted) return sock.sendMessage(from, { text: "❌ Réponds à une vue unique avec *.vv*" }, { quoted: m })
-            let inner = quoted.viewOnceMessageV2 || quoted.viewOnceMessage || quoted
+            let inner = quoted.viewOnceMessageV2 || quoted.viewOnceMessage || quoted.viewOnceMessageV2Extension || quoted
             inner = inner.message || inner
             if (inner.imageMessage) {
               return await sock.sendMessage(from, { image: inner.imageMessage, caption: "✅ *VV récupéré par CHOCO-V10* 🥷" }, { quoted: m })
             } else if (inner.videoMessage) {
               return await sock.sendMessage(from, { video: inner.videoMessage, caption: "✅ *VV récupéré par CHOCO-V10* 🥷" }, { quoted: m })
+            } else if (inner.audioMessage) {
+              return await sock.sendMessage(from, { audio: inner.audioMessage, mimetype: "audio/mp4", ptt: true }, { quoted: m })
             } else {
               return sock.sendMessage(from, { text: "❌ Pas de VV trouvé" }, { quoted: m })
             }
@@ -319,7 +320,7 @@ const server = http.createServer(async (req, res) => {
       const { state, saveCreds } = await useMultiFileAuthState("session")
       const sock = makeWASocket({
         auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" })) },
-        logger: P({ level: "silent" }), browser: ["Chrome", "Chrome", "110"], printQRInTerminal: false
+        logger: P({ level: "silent" }), browser: ["Ubuntu", "Chrome", "20.0.02"], printQRInTerminal: false
       })
       sock.ev.on("creds.update", saveCreds)
       await new Promise(r => setTimeout(r, 3000))
@@ -335,7 +336,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
-  res.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;border:1px solid #222}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;background:#2a2a2a;color:#fff;text-align:center}button{background:#ff0000;color:#fff;border:none;padding:14px;border-radius:10px;width:95%;font-weight:bold;cursor:pointer}#code{font-size:32px;color:#00ff88;margin:20px 0;font-weight:bold;letter-spacing:3px}#msg{color:#ffaa00;font-size:13px;margin-top:10px}</style></head><body><div class="card"><h1>🥷 CHOCO-V10</h1><p>Site officiel de connexion</p><input id="num" value="224611257942"><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');document.getElementById('code').innerText='...';document.getElementById('msg').innerText='Patiente 5 sec...';try{let clr=await fetch('/clear');await new Promise(r=>setTimeout(r,2000));let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='Code genere!'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('msg').innerText=e.message}}</script></body></html>`)
+  res.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;border:1px solid #222}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;background:#2a2a2a;color:#fff;text-align:center}button{background:#ff0000;color:#fff;border:none;padding:14px;border-radius:10px;width:95%;font-weight:bold;cursor:pointer}#code{font-size:32px;color:#00ff88;margin:20px 0;font-weight:bold;letter-spacing:3px}#msg{color:#ffaa00;font-size:13px;margin-top:10px}</style></head><body><div class="card"><h1>🥷 CHOCO-V10</h1><p>Site officiel de connexion</p><input id="num" value="224611257942"><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');document.getElementById('code').innerText='...';document.getElementById('msg').innerText='Patiente 5 sec...';try{let clr=await fetch('/clear');await new Promise(r=>setTimeout(r,2000));let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='Code genere! Colle VITE (<10sec) dans WhatsApp!'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('msg').innerText=e.message}}</script></body></html>`)
 })
 server.listen(process.env.PORT || 10000, () => console.log("Serveur ouvert"))
 startBot()
