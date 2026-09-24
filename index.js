@@ -1,4 +1,4 @@
-import from "@whiskeysockets/baileys"
+import pkg from "@whiskeysockets/baileys"
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = pkg
 import config from "./config.js"
 import P from "pino"
