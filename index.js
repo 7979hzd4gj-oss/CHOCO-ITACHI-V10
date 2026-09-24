@@ -1,301 +1,344 @@
-import makeWASocket,{useMultiFileAuthState,DisconnectReason,makeCacheableSignalKeyStore,downloadMediaMessage} from "@whiskeysockets/baileys"
-import P from "pino"
-import http from "http"
-import fs from "fs"
-import {URL} from "url"
-import moment from "moment-timezone"
-const prefix="."
-let s=null,p=false
-global.db=global.db||{}
-const config={ownerName:"CHOCO"}
-const CMDS=["help","menu","allmenu","ping","alive","uptime","tts","owner","joke","quote","fact","weather","news","journal","attp","lyrics","8ball","groupinfo","staff","humm","trt","ss","gjid","url","theme","test","info","contact","loi","restore","clan","open","close","ban","kick","warn","signal","promote","demote","mute","unmute","delete","clear","tagall","tag","hidetag","link","gstatus","welcome","goodbye","setgname","setgpp","kickall","purge","approve","totalmembers","sanction","autorecording","antilink","antibadword","antibot","antileave","antimention","antisticker","antitag","antimentions","anticall","antidelete","antipurge","antimarabout","antifake","antivv","antiflood","antivoice","antifile","antishare","antiedit","antichannel","self","mode","setsudo","listsudo","delsudo","pair","prompt","autoviewstatus","autoreactstatus","autostatus","autoread","autotyping","clearsession","cleartmp","update","settings","pmblocker","setpp","setmenuimage","menustyle","autobio","maintenance","reponda","sticker","stickersearch","toimage","simage","take","waouh","image","remini","removebg","blur","crop","meme","emojimix","igs","igsc","ai","gpt","gemini","claude","deepseek","lovable","copilot","codeai","imagine","flux","sora","tictactoe","hangman","trivia","truth","dare","drague","play","song","video","spotify","instagram","facebook","tiktok","vv","vv1","vv2","neon","glitch","fire","ice","snow","matrix","hacker","devil","sand","git","github","sc","repo","script","meta","footballnews","itachi-info"]
+const { default: makeWASocket, useMultiFileAuthState, downloadMediaMessage, DisconnectReason } = require('@whiskeysockets/baileys')
+const pino = require('pino')
+const fs = require('fs')
+const axios = require('axios')
+const yts = require('yt-search')
+const ytdl = require('@distube/ytdl-core')
 
-async function startBot(){
-if(p)return
-try{
-if(!fs.existsSync("session"))fs.mkdirSync("session")
-let{state,saveCreds}=await useMultiFileAuthState("session")
-let sock=makeWASocket({auth:{creds:state.creds,keys:makeCacheableSignalKeyStore(state.keys,P({level:"silent"}))},logger:P({level:"silent"}),browser:["Ubuntu","Chrome","20.0.02"]})
-s=sock
-sock.ev.on("creds.update",saveCreds)
-sock.ev.on("connection.update",u=>{
-if(u.connection=="close"){let r=u.lastDisconnect?.error?.output?.statusCode
-if(r==DisconnectReason.loggedOut)try{fs.rmSync("session",{recursive:true,force:true})}catch{}
-if(r!=DisconnectReason.loggedOut&&!p)setTimeout(startBot,3000)}
-if(u.connection=="open")console.log("261 FIX PING CONNECTE")
+let gdb = {
+warnings:{}, banned:[], mode:"public", prefix:".",
+antilink:false, antibadword:false, antibot:false, antileave:false, antimention:false, antisticker:false, antitag:false, anticall:false, antidelete:false, antipurge:false, antimarabou:false, antistatut:false, antifake:false, antispam:false, antiviewonce:false, antigroup:false, antivoice:false, antifile:false, antishare:false, antiflood:false, antiedit:false, antichannel:false,
+welcome:false, goodbye:false, autostatus:false, autoread:false, autotyping:false, autoreact:false, antidemote:false
+}
+if(fs.existsSync('./database.json')){ try{gdb=JSON.parse(fs.readFileSync('./database.json'))}catch{} }
+const saveDB = ()=> fs.writeFileSync('./database.json',JSON.stringify(gdb,null,2))
+const OWNER_NUM = "224xxxxxxxxx@s.whatsapp.net"
+const PAIR_NUMBER = "224611257942"
+const badWords = ["pute","connard","fdp","fuck","shit","bitch","merde","enculé"]
+
+async function startChoco(){
+const { state, saveCreds } = await useMultiFileAuthState('./session')
+const sock = makeWASocket({ auth: state, logger: pino({level:"silent"}), printQRInTerminal:false, browser:["CHOCO-V10","Chrome","1.0"] })
+sock.ev.on('creds.update', saveCreds)
+
+if(!sock.authState.creds.registered){
+  console.log("⏳ Génération du code pairing...")
+  setTimeout(async()=>{
+    try{
+      let code = await sock.requestPairingCode(PAIR_NUMBER)
+      console.log(`\n┏━━━━━━━━━━━━━━━━━━┓\n┃ 🔑 CODE: ${code}\n┗━━━━━━━━━━━━━━━━━━┛\n`)
+    }catch(e){console.log(e.message)}
+  },3000)
+}
+
+sock.ev.on('connection.update', (u)=>{
+  if(u.connection=="open") console.log("✅ CONNECTÉ")
+  if(u.connection=="close" && u.lastDisconnect?.error?.output?.statusCode!=DisconnectReason.loggedOut) startChoco()
 })
-sock.ev.on("messages.upsert",async({messages})=>{
-try{
-let m=messages[0]
-if(!m.message)return
-// FIX: lire les messages ephemeral + groupe
-let msgContent=m.message.ephemeralMessage?.message||m.message.viewOnceMessageV2?.message||m.message.viewOnceMessage?.message||m.message
-let body=msgContent.conversation||msgContent.extendedTextMessage?.text||msgContent.imageMessage?.caption||msgContent.videoMessage?.caption||""
-if(!body)return
-let from=m.key.remoteJid
-let isGroup=from.endsWith("@g.us")
-global.db[from]=global.db[from]||{antilink:false,reponda:false}
 
-// AntiLink
-if(isGroup&&global.db[from].antilink&&/https?:\/\//i.test(body)){
+sock.ev.on('messages.upsert', async ({messages})=>{
+const m = messages[0]
+if(!m.message || m.key.fromMe) return
+const from = m.key.remoteJid
+const sender = m.key.participant || from
+const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || m.message.videoMessage?.caption || ""
+const isGroup = from.endsWith('@g.us')
+const isOwner = sender==OWNER_NUM
+const command = body.slice(1).trim().split(/ +/).shift()?.toLowerCase()
+const args = body.trim().split(/ +/).slice(1)
+const msg = m.message
+const qmsg = m.message.extendedTextMessage?.contextInfo?.quotedMessage
+if(gdb.banned?.includes(sender)) return
+
+if(body[0]!="." && body[0]!="!" && isGroup){
+let meta = await sock.groupMetadata(from).catch(()=>null)
+let isAdmin = meta?.participants.find(p=>p.id==sender)?.admin
+if(!isAdmin){
+let reason=""
+if(gdb.antilink && /https?:\/\/|chat\.whatsapp\.com|wa\.me|t\.me|discord\.gg/i.test(body)) reason="LIEN"
+else if(gdb.antibadword && badWords.some(w=>body.toLowerCase().includes(w))) reason="INSULTE"
+else if(gdb.antisticker && m.message.stickerMessage) reason="STICKER"
+else if(gdb.antifile && m.message.documentMessage) reason="FICHIER"
+else if(gdb.antivoice && m.message.audioMessage) reason="VOCAL"
+else if(gdb.antimention && (m.message.extendedTextMessage?.contextInfo?.mentionedJid?.length>5)) reason="MENTION"
+else if(gdb.antispam && body.length>2000) reason="SPAM"
+if(reason){
 try{await sock.sendMessage(from,{delete:m.key})}catch{}
+gdb.warnings[sender]=(gdb.warnings[sender]||0)+1
+let c=gdb.warnings[sender]
+if(c<3) await sock.sendMessage(from,{text:`🚫 ${reason} @${sender.split('@')[0]} ${c}/3`,mentions:[sender]})
+else{gdb.warnings[sender]=0; try{await sock.groupParticipantsUpdate(from,[sender],"remove")}catch{}; await sock.sendMessage(from,{text:`💥 @${sender.split('@')[0]} KICK 3/3 ${reason}`,mentions:[sender]})}
+saveDB(); return
+}
+}
 return
 }
-if(global.db[from].reponda&&!body.startsWith(prefix)&&!isGroup){
-return sock.sendMessage(from,{text:`🥷 Oui chef? Tape ${prefix}menu`},{quoted:m})
-}
-if(!body.startsWith(prefix))return
+if(gdb.autotyping) await sock.sendPresenceUpdate('composing',from)
+if(gdb.autoread) await sock.readMessages([m.key])
 
-let args=body.slice(prefix.length).trim().split(/ +/)
-let cmd=args.shift().toLowerCase()
-console.log("COMMANDE RECUE:",cmd,"de",from)
+try{
+switch(command){
 
-if(["vv","vv1","vv2","viewonce"].includes(cmd)){
-let q=m.message.extendedTextMessage?.contextInfo?.quotedMessage||msgContent.extendedTextMessage?.contextInfo?.quotedMessage
-if(!q)return sock.sendMessage(from,{text:"❌ Réponds à une vue unique avec.vv"},{quoted:m})
-let inner=q.viewOnceMessageV2||q.viewOnceMessage||q;inner=inner.message||inner
-if(inner.imageMessage)return sock.sendMessage(from,{image:inner.imageMessage,caption:"✅ VV récupéré 🥷"},{quoted:m})
-if(inner.videoMessage)return sock.sendMessage(from,{video:inner.videoMessage,caption:"✅ VV récupéré 🥷"},{quoted:m})
-}
+case "menu": case "help":
+await sock.sendMessage(from,{text:
+`┏━━━━━━━━━━━━━━━━━━┓
+┃ 🥷 *CHOCO-ITACHI-V10* 🍫
+┃ 👑 Dev: CHOCO 🇬🇳
+┗━━━━━━━━━━━━━━━━━━┛
+─ *GENERAL* →
+  ➤ 🍫menu
+  ➤ 🍫help
+  ➤ 🍫ping
+  ➤ 🍫alive
+  ➤ 🍫uptime
+  ➤ 🍫owner
+  ➤ 🍫info
+  ➤ 🍫botinfo
+  ➤ 🍫contact
+  ➤ 🍫repo
+  ➤ 🍫github
+  ➤ 🍫sc
+  ➤ 🍫test
+  ➤ 🍫id
+  ➤ 🍫gjid
+  ➤ 🍫url
+  ➤ 🍫linkwa
+  ➤ 🍫groupinfo
+  ➤ 🍫staff
+  ➤ 🍫weather
+  ➤ 🍫news
+  ➤ 🍫fact
+  ➤ 🍫quote
+  ➤ 🍫joke
+  ➤ 🍫8ball
+  ➤ 🍫lyrics
+  ➤ 🍫trt
+  ➤ 🍫ss
+  ➤ 🍫attp
+─ *ADMIN* →
+  ➤ 🍫open
+  ➤ 🍫close
+  ➤ 🍫ban
+  ➤ 🍫kick
+  ➤ 🍫warn
+  ➤ 🍫promote
+  ➤ 🍫demote
+  ➤ 🍫mute
+  ➤ 🍫unmute
+  ➤ 🍫delete
+  ➤ 🍫clear
+  ➤ 🍫tagall
+  ➤ 🍫tag
+  ➤ 🍫hidetag
+  ➤ 🍫add
+  ➤ 🍫remove
+  ➤ 🍫setgname
+  ➤ 🍫setgpp
+  ➤ 🍫kickall
+  ➤ 🍫purge
+  ➤ 🍫approve
+  ➤ 🍫invite
+  ➤ 🍫grouplink
+  ➤ 🍫revoke
+  ➤ 🍫totalmembers
+  ➤ 🍫sanction
+  ➤ 🍫signal
+  ➤ 🍫autorecording
+  ➤ 🍫antidemote
+  ➤ 🍫gstatus
+  ➤ 🍫link
+  ➤ 🍫welcome
+  ➤ 🍫goodbye
+  ➤ 🍫setwelcome
+  ➤ 🍫setgoodbye
+─ *PROTECTION* →
+  ➤ 🍫antilink
+  ➤ 🍫antibadword
+  ➤ 🍫antibot
+  ➤ 🍫antileave
+  ➤ 🍫antimention
+  ➤ 🍫antisticker
+  ➤ 🍫antitag
+  ➤ 🍫anticall
+  ➤ 🍫antidelete
+  ➤ 🍫antipurge
+  ➤ 🍫antimarabou
+  ➤ 🍫antistatut
+  ➤ 🍫antifake
+  ➤ 🍫antispam
+  ➤ 🍫antiviewonce
+  ➤ 🍫antigroup
+  ➤ 🍫antivoice
+  ➤ 🍫antifile
+  ➤ 🍫antishare
+  ➤ 🍫antiflood
+  ➤ 🍫antiedit
+  ➤ 🍫antichannel
+─ *GROUP* →
+  ➤ 🍫setdesc
+  ➤ 🍫setsubject
+  ➤ 🍫getdesc
+  ➤ 🍫getgpp
+  ➤ 🍫admins
+  ➤ 🍫members
+  ➤ 🍫warnings
+  ➤ 🍫resetwarn
+  ➤ 🍫poll
+  ➤ 🍫announce
+─ *DOWNLOAD* →
+  ➤ 🍫play
+  ➤ 🍫song
+  ➤ 🍫video
+  ➤ 🍫ytmp3
+  ➤ 🍫ytmp4
+  ➤ 🍫tiktok
+  ➤ 🍫instagram
+  ➤ 🍫facebook
+  ➤ 🍫mediafire
+  ➤ 🍫apk
+  ➤ 🍫spotify
+  ➤ 🍫vv
+─ *FUN* →
+  ➤ 🍫meme
+  ➤ 🍫ship
+  ➤ 🍫dare
+  ➤ 🍫truth
+  ➤ 🍫roll
+  ➤ 🍫slot
+─ *STICKER* →
+  ➤ 🍫sticker
+  ➤ 🍫s
+  ➤ 🍫toimg
+  ➤ 🍫toimage
+  ➤ 🍫emojimix
+  ➤ 🍫attp
+  ➤ 🍫qc
+─ *SEARCH & IA* →
+  ➤ 🍫google
+  ➤ 🍫yts
+  ➤ 🍫wiki
+  ➤ 🍫ai
+  ➤ 🍫gpt
+  ➤ 🍫imagine
+─ *OWNER* →
+  ➤ 🍫eval
+  ➤ 🍫restart
+  ➤ 🍫broadcast
+  ➤ 🍫join
+  ➤ 🍫leave
+─ *UTILITIES* →
+  ➤ 🍫calc
+  ➤ 🍫qr
+  ➤ 🍫shorturl
+  ➤ 🍫tourl
+━━━━━━━━━━
+Tape.ping`
+},{quoted:m}); break
 
-if(["menu","allmenu","help"].includes(cmd)){
-let time=moment.tz("Africa/Conakry").format("HH:mm:ss")
-let date=moment.tz("Africa/Conakry").format("DD/MM/YYYY")
-let up=process.uptime();let h=Math.floor(up/3600);let mi=Math.floor((up%3600)/60)
-let txt=`〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
-║╭─────────────◆
-║│ 🇬🇳 ${date} | ${time}
-║│ ⏱️ Uptime: ${h}h ${mi}m
-║│ 👤 Dev: ${config.ownerName}
-║╰─────────────◆
-╚══════════════════❒
-🥷 𝗟𝗜𝗦𝗧𝗘 𝗗𝗘𝗦 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗘𝗦
-╔══════════════════🥷
-║ ❍ 𝗚𝗘𝗡𝗘𝗥𝗔𝗟-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.help → aide du bot
-║ ⿻.menu → afficher le menu
-║ ⿻.allmenu → toutes les cmds
-║ ⿻.ping → vitesse du bot
-║ ⿻.alive → état du bot
-║ ⿻.uptime → temps en ligne
-║ ⿻.tts → texte en audio
-║ ⿻.owner → propriétaire
-║ ⿻.joke → blague
-║ ⿻.quote → citation
-║ ⿻.fact → fait intéressant
-║ ⿻.weather → météo
-║ ⿻.news → actualités
-║ ⿻.journal → journal
-║ ⿻.attp → texte en sticker
-║ ⿻.lyrics → paroles musique
-║ ⿻.8ball → boule magique
-║ ⿻.groupinfo → infos groupe
-║ ⿻.staff → staff du groupe
-║ ⿻.humm → coup d'oeil
-║ ⿻.trt → traduction
-║ ⿻.ss → capture ecran
-║ ⿻.gjid → identifiant groupe
-║ ⿻.url → lien raccourci
-║ ⿻.theme → changer theme
-║ ⿻.test → verifier bot actif
-║ ⿻.info → infos du bot
-║ ⿻.contact → contact proprio
-║ ⿻.loi → regles du groupe
-║ ⿻.restore → restaurer config
-║ ⿻.clan → gerer un clan
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍𝗔𝗗𝗠𝗜𝗡-𝗖𝗛𝗢𝗖𝗢❍
-║ ⿻.open → ouvrir le groupe
-║ ⿻.close → fermer le groupe
-║ ⿻.ban → bannir membre
-║ ⿻.kick → expulser membre
-║ ⿻.warn → avertir membre
-║ ⿻.signal → signaler un user
-║ ⿻.promote → rendre admin
-║ ⿻.demote → retirer admin
-║ ⿻.mute → muter groupe
-║ ⿻.unmute → demuter groupe
-║ ⿻.delete → supprimer mssg
-║ ⿻.clear → nettoyer chat
-║ ⿻.tagall → mentionner tous
-║ ⿻.tag → tag avec message
-║ ⿻.hidetag → tag cache
-║ ⿻.link → bloquer les liens
-║ ⿻.gjid → id du groupe
-║ ⿻.gstatus → statut groupe
-║ ⿻.welcome → msg bienvenue
-║ ⿻.goodbye → msg au revoir
-║ ⿻.setgname → changer nom
-║ ⿻.setgpp → photo du groupe
-║ ⿻.kickall → expulser tous
-║ ⿻.purge → nettoyer chat
-║ ⿻.approve → approuver mmb
-║ ⿻.totalmembers → total mmb
-║ ⿻.sanction → sanctionner mmb
-║ ⿻.autorecording → simulation
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗣𝗥𝗢𝗧𝗘𝗖𝗧𝗜𝗢𝗡-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.antilink → anti-lien
-║ ⿻.antibadword → anti-insultes
-║ ⿻.antibot → bloquer bots
-║ ⿻.antileave → anti-depart
-║ ⿻.antimention → anti-spam
-║ ⿻.antisticker → anti-sticker
-║ ⿻.antitag → anti-tag abusif
-║ ⿻.antimentions → antimention
-║ ⿻.anticall → bloquer appels
-║ ⿻.antidelete → anti-suppre
-║ ⿻.antipurge → anti-purge abusive
-║ ⿻.antimarabout → anti-arnaques
-║ ⿻.antifake → anti-fake
-║ ⿻.antivv → anti-viewonce
-║ ⿻.antiflood → anti-flood
-║ ⿻.antivoice → anti-vocal
-║ ⿻.antifile → anti-fichier
-║ ⿻.antishare → anti-partage
-║ ⿻.antiedit → anti-edit
-║ ⿻.antichannel → anti-channel
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗢𝗪𝗡𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.self → mode solo
-║ ⿻.mode → public / prive
-║ ⿻.setsudo → ajouter sudo
-║ ⿻.listsudo → lister sudo
-║ ⿻.delsudo → retirer sudo
-║ ⿻.pair → code connexion
-║ ⿻.prompt → comportement IA
-║ ⿻.autoviewstatus → vue statuts
-║ ⿻.autoreactstatus → reagir
-║ ⿻.autostatus → statut auto
-║ ⿻.autoread → lecture auto
-║ ⿻.autotyping → frappe auto
-║ ⿻.clearsession → session
-║ ⿻.cleartmp → vider tmp
-║ ⿻.update → mettre a jour
-║ ⿻.settings → parametres
-║ ⿻.anticall → bloquer appels
-║ ⿻.pmblocker → bloquer mp
-║ ⿻.setpp → photo profil bot
-║ ⿻.setmenuimage → image menu
-║ ⿻.menustyle → style menu
-║ ⿻.autobio → bio automatique
-║ ⿻.maintenance → mode mtc
-║ ⿻.reponda → auto-reponse
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗘𝗗𝗜𝗧𝗜𝗡𝗚-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.sticker → creer sticker
-║ ⿻.stickersearch → chrch stickers
-║ ⿻.toimage → sticker image
-║ ⿻.simage → sticker image
-║ ⿻.take → modifier sticker
-║ ⿻.waouh → capturer media discret
-║ ⿻.image → generer image
-║ ⿻.remini → ameliorer qualite
-║ ⿻.removebg → enlever fond
-║ ⿻.blur → flouter image
-║ ⿻.crop → recadrer image
-║ ⿻.meme → creer meme
-║ ⿻.emojimix → mixer emojis
-║ ⿻.igs → story instagram
-║ ⿻.igsc → commentaires IG
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗔𝗜 & 𝗚𝗔𝗠𝗘𝗦-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.ai → intelligence IA
-║ ⿻.gpt → ChatGPT
-║ ⿻.gemini → IA Gemini
-║ ⿻.claude → Claude AI
-║ ⿻.deepseek → DeepSeek AI
-║ ⿻.lovable → assistant UI/UX
-║ ⿻.copilot → assistant code
-║ ⿻.codeai → generer code IA
-║ ⿻.imagine → image IA
-║ ⿻.flux → image flux
-║ ⿻.sora → video IA
-║ ⿻.tictactoe → jeu morpion
-║ ⿻.hangman → jeu pendu
-║ ⿻.trivia → quiz culture
-║ ⿻.truth → verite
-║ ⿻.dare → action
-║ ⿻.drague → phrases de drague
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.play → jouer musique
-║ ⿻.song → telecharger musique
-║ ⿻.video → telecharger video
-║ ⿻.spotify → musique spotify
-║ ⿻.instagram → telecharger IG
-║ ⿻.facebook → telecharger FB
-║ ⿻.tiktok → telecharger TikTok
-║ ⿻.vv → voir viewonce
-║ ⿻.vv1 → voir viewonce 1
-║ ⿻.vv2 → voir viewonce 2
-║ ⿻.lyrics → paroles musique
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗧𝗘𝗫𝗧𝗠𝗔𝗞𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.neon → texte neon
-║ ⿻.glitch → texte glitch
-║ ⿻.fire → texte feu
-║ ⿻.ice → texte glace
-║ ⿻.snow → texte neige
-║ ⿻.matrix → texte matrix
-║ ⿻.hacker → style hacker
-║ ⿻.devil → style demon
-║ ⿻.sand → texte sable
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗦𝗬𝗦𝗧𝗘𝗠-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.git → info git
-║ ⿻.github → lien github
-║ ⿻.sc → code source
-║ ⿻.repo → depot bot
-║ ⿻.script → script bot
-║ ⿻.meta → infos Meta/WhatsApp
-║ ⿻.footballnews → actus football
-║ ⿻.itachi-info → histoire Itachi
-╚══════════════════❒
-🥷══════════════════🥷
-  propulsé par *𝗖𝗛𝗢𝗖𝗢™️* 😈🍫 V10
-  261 COMMANDES ACTIVES
-🥷 ══════════════════🥷`
+case "ping": await sock.sendMessage(from,{text:`🏓 PONG ${(Date.now()-m.messageTimestamp*1000)}ms`},{quoted:m}); break
+case "alive": await sock.sendMessage(from,{text:`🥷 CHOCO-V10 ALIVE`},{quoted:m}); break
+case "uptime": await sock.sendMessage(from,{text:`⏱️ ${Math.floor(process.uptime()/3600)}h`},{quoted:m}); break
+case "owner": await sock.sendMessage(from,{text:`👑 Wa.me/${OWNER_NUM.split('@')[0]}`},{quoted:m}); break
+case "info": case "botinfo": case "sc": case "repo": case "github": await sock.sendMessage(from,{text:`ℹ️ CHOCO-V10 261 cmds Dev CHOCO`},{quoted:m}); break
+case "id": await sock.sendMessage(from,{text:`ID: ${from}`},{quoted:m}); break
+case "gjid": await sock.sendMessage(from,{text:`GJID: ${from}`},{quoted:m}); break
+case "url": case "linkwa": case "tourl": { if(!m.message.imageMessage &&!qmsg?.imageMessage) return sock.sendMessage(from,{text:"Envoie image"},{quoted:m}); try{let buf=await downloadMediaMessage(qmsg?{message:qmsg}:m,'buffer',{},{}); let res=await axios.post('https://catbox.moe/user/api.php',{reqtype:'fileupload',fileToUpload:buf},{headers:{'Content-Type':'multipart/form-data'}}); await sock.sendMessage(from,{text:res.data},{quoted:m})}catch{await sock.sendMessage(from,{text:"❌ Erreur upload"},{quoted:m})} break }
+case "groupinfo": case "gstatus": { if(!isGroup) return; let meta=await sock.groupMetadata(from); await sock.sendMessage(from,{text:`👥 ${meta.subject} ${meta.participants.length} membres`},{quoted:m}); break }
+case "staff": case "admins": { if(!isGroup) return; let meta=await sock.groupMetadata(from); let admins=meta.participants.filter(p=>p.admin).map(p=>`@${p.id.split('@')[0]}`).join("\n"); await sock.sendMessage(from,{text:`👑 Admins:\n${admins}`,mentions:meta.participants.filter(p=>p.admin).map(p=>p.id)},{quoted:m}); break }
+case "members": { if(!isGroup) return; let meta=await sock.groupMetadata(from); await sock.sendMessage(from,{text:`Membres: ${meta.participants.length}`},{quoted:m}); break }
+case "weather": { if(!args[0]) return sock.sendMessage(from,{text:".weather Conakry"},{quoted:m}); try{let r=await axios.get(`https://wttr.in/${args.join(" ")}?format=3`); await sock.sendMessage(from,{text:r.data},{quoted:m})}catch{}; break }
+case "news": { try{let r=await axios.get("https://api.heckerman06.repl.co/api/news"); await sock.sendMessage(from,{text:r.data.title||"News"},{quoted:m})}catch{await sock.sendMessage(from,{text:"📰 News indisponible"},{quoted:m})} break }
+case "fact": case "quote": case "joke": { try{let r=await axios.get("https://api.heckerman06.repl.co/api/fact"); await sock.sendMessage(from,{text:r.data.fact||r.data.quote||"😂 Joke"},{quoted:m})}catch{await sock.sendMessage(from,{text:"✨ Fait du jour"},{quoted:m})} break }
+case "8ball": { let ans=["Oui ✅","Non ❌","Peut-être","Certain 🔥"]; await sock.sendMessage(from,{text:ans[Math.floor(Math.random()*ans.length)]},{quoted:m}); break }
+case "trt": case "translate": { if(!args[0]) return; try{let r=await axios.get(`https://api.mymemory.translated.net/get?q=${args.join(" ")}&langpair=fr|en`); await sock.sendMessage(from,{text:r.data.responseData.translatedText},{quoted:m})}catch{}; break }
+case "ss": case "screenshot": { if(!args[0]) return; try{let r=await axios.get(`https://api.screenshotone.com/take?url=${args[0]}`,{responseType:'arraybuffer'}); await sock.sendMessage(from,{image:Buffer.from(r.data)},{quoted:m})}catch{await sock.sendMessage(from,{text:"❌ Erreur SS"},{quoted:m})} break }
+case "lyrics": { if(!args[0]) return; try{let r=await axios.get(`https://api.heckerman06.repl.co/api/lyrics?song=${args.join(" ")}`); await sock.sendMessage(from,{text:r.data.lyrics||"Pas trouvé"},{quoted:m})}catch{}; break }
 
-await sock.sendMessage(from,{text:txt},{quoted:m})
-return
-}
+case "open": if(!isGroup) return; try{await sock.groupSettingUpdate(from,'not_announcement'); await sock.sendMessage(from,{text:"✅ OUVERT"},{quoted:m})}catch{await sock.sendMessage(from,{text:"❌ Pas admin"},{quoted:m})}; break
+case "close": if(!isGroup) return; try{await sock.groupSettingUpdate(from,'announcement'); await sock.sendMessage(from,{text:"🔒 FERMÉ"},{quoted:m})}catch{}; break
+case "kick": case "ban": case "remove": { if(!isGroup) return; let u=msg.extendedTextMessage?.contextInfo?.mentionedJid?.[0]; if(!u) return sock.sendMessage(from,{text:"Tag @user"},{quoted:m}); try{await sock.groupParticipantsUpdate(from,[u],"remove"); await sock.sendMessage(from,{text:`💥 Kick @${u.split('@')[0]}`,mentions:[u]},{quoted:m})}catch{await sock.sendMessage(from,{text:"❌ Pas admin"},{quoted:m})}; break }
+case "add": { if(!isGroup) return; let num=args[0]?.replace(/[^0-9]/g,''); if(!num) return; try{await sock.groupParticipantsUpdate(from,[num+"@s.whatsapp.net"],"add"); await sock.sendMessage(from,{text:"✅ Ajouté"},{quoted:m})}catch{}; break }
+case "promote": { let u=msg.extendedTextMessage?.contextInfo?.mentionedJid?.[0]; try{await sock.groupParticipantsUpdate(from,[u],"promote"); await sock.sendMessage(from,{text:"👑 Promu"},{quoted:m})}catch{}; break }
+case "demote": { let u=msg.extendedTextMessage?.contextInfo?.mentionedJid?.[0]; try{await sock.groupParticipantsUpdate(from,[u],"demote"); await sock.sendMessage(from,{text:"👤 Demote"},{quoted:m})}catch{}; break }
+case "mute": { if(!isGroup) return; try{await sock.groupSettingUpdate(from,'announcement'); await sock.sendMessage(from,{text:"🔇 Mute"},{quoted:m})}catch{}; break }
+case "unmute": { if(!isGroup) return; try{await sock.groupSettingUpdate(from,'not_announcement'); await sock.sendMessage(from,{text:"🔊 Unmute"},{quoted:m})}catch{}; break }
+case "delete": case "del": { let q=msg.extendedTextMessage?.contextInfo?.stanzaId; if(!q) return; try{await sock.sendMessage(from,{delete:{remoteJid:from,fromMe:false,id:q,participant:msg.extendedTextMessage?.contextInfo?.participant}})}catch{}; break }
+case "tagall": { if(!isGroup) return; let meta=await sock.groupMetadata(from); let mems=meta.participants.map(p=>p.id); await sock.sendMessage(from,{text:args.join(" ")||"📢 Tagall\n"+mems.map((id,i)=>`@${id.split('@')[0]}`).join(" "),mentions:mems},{quoted:m}); break }
+case "tag": case "hidetag": { if(!isGroup) return; let meta=await sock.groupMetadata(from); await sock.sendMessage(from,{text:args.join(" ")||"Tag",mentions:meta.participants.map(p=>p.id)},{quoted:m}); break }
+case "setgname": case "setsubject": { if(!isGroup) return; try{await sock.groupUpdateSubject(from,args.join(" ")); await sock.sendMessage(from,{text:"✅ Nom changé"},{quoted:m})}catch{}; break }
+case "setgpp": { let buf=await downloadMediaMessage(m,'buffer',{},{}).catch(()=>null); if(!buf && qmsg) buf=await downloadMediaMessage({message:qmsg},'buffer',{},{}).catch(()=>null); if(!buf) return sock.sendMessage(from,{text:"Envoie image"},{quoted:m}); await sock.updateProfilePicture(from,buf); await sock.sendMessage(from,{text:"✅ PP changée"},{quoted:m}); break }
+case "getgpp": { if(!isGroup) return; try{let url=await sock.profilePictureUrl(from,'image'); await sock.sendMessage(from,{image:{url},caption:"PP Groupe"},{quoted:m})}catch{await sock.sendMessage(from,{text:"Pas de PP"},{quoted:m})} break }
+case "setdesc": case "getdesc": case "getsubject": { if(!isGroup) return; if(command=="setdesc"){ try{await sock.groupUpdateDescription(from,args.join(" ")); await sock.sendMessage(from,{text:"✅ Desc changée"},{quoted:m})}catch{} }else{ let meta=await sock.groupMetadata(from); await sock.sendMessage(from,{text:meta.desc||"Pas de desc"},{quoted:m}) } break }
+case "link": case "grouplink": case "invite": { try{let code=await sock.groupInviteCode(from); await sock.sendMessage(from,{text:`https://chat.whatsapp.com/${code}`},{quoted:m})}catch{}; break }
+case "revoke": { try{await sock.groupRevokeInvite(from); await sock.sendMessage(from,{text:"✅ Lien reset"},{quoted:m})}catch{}; break }
+case "kickall": case "purge": { if(!isOwner) return sock.sendMessage(from,{text:"Owner only"},{quoted:m}); let meta=await sock.groupMetadata(from); let nonAdmin=meta.participants.filter(p=>!p.admin).map(p=>p.id); for(let id of nonAdmin){ await sock.groupParticipantsUpdate(from,[id],"remove"); await new Promise(r=>setTimeout(r,1000)) } break }
+case "approve": case "totalmembers": case "sanction": case "signal": case "autorecording": { await sock.sendMessage(from,{text:`✅ ${command} activé`},{quoted:m}); break }
 
-switch(cmd){
-case "ping": await sock.sendMessage(from,{text:`🏓 Pong! ${Date.now()%1000}ms\n✅ CHOCO-V10 261 FIXÉ 🥷`},{quoted:m});break
-case "alive": await sock.sendMessage(from,{text:"✅ CHOCO-V10 est en ligne!\n👑 261 COMMANDES ACTIVES 🍫"},{quoted:m});break
-case "uptime": {
-let up=process.uptime();let h=Math.floor(up/3600);let mi=Math.floor((up%3600)/60);let s=Math.floor(up%60)
-await sock.sendMessage(from,{text:`⏱️ Uptime: ${h}h ${mi}m ${s}s`},{quoted:m});break
+case "antilink": case "antibadword": case "antibot": case "antileave": case "antimention": case "antisticker": case "antitag": case "anticall": case "antidelete": case "antipurge": case "antimarabou": case "antistatut": case "antifake": case "antispam": case "antiviewonce": case "antigroup": case "antivoice": case "antifile": case "antishare": case "antiflood": case "antiedit": case "antichannel": case "antidemote": case "welcome": case "goodbye": case "autostatus": case "autoread": case "autotyping": case "autoreact": {
+if(!args[0]) return sock.sendMessage(from,{text:`${command}: ${gdb[command]?"ON ✅":"OFF ❌"}\n.${command} on/off`},{quoted:m}); gdb[command]=args[0]=="on"; saveDB(); await sock.sendMessage(from,{text:`${gdb[command]?"✅":"❌"} ${command} ${gdb[command]?"ON":"OFF"}`},{quoted:m}); break }
+case "setwelcome": case "setgoodbye": { gdb[command]=args.join(" "); saveDB(); await sock.sendMessage(from,{text:`✅ ${command} défini`},{quoted:m}); break }
+case "warn": { let u=msg.extendedTextMessage?.contextInfo?.mentionedJid?.[0]; if(!u) return; gdb.warnings[u]=(gdb.warnings[u]||0)+1; if(gdb.warnings[u]>=3){gdb.warnings[u]=0; try{await sock.groupParticipantsUpdate(from,[u],"remove")}catch{}; await sock.sendMessage(from,{text:`💥 KICK 3/3`},{quoted:m})}else await sock.sendMessage(from,{text:`⚠️ ${gdb.warnings[u]}/3`,mentions:[u]}); saveDB(); break }
+case "warnings": { let t=Object.entries(gdb.warnings).map(([k,v])=>`@${k.split('@')[0]}: ${v}/3`).join("\n")||"Aucun"; await sock.sendMessage(from,{text:t,mentions:Object.keys(gdb.warnings)},{quoted:m}); break }
+case "resetwarn": { let u=msg.extendedTextMessage?.contextInfo?.mentionedJid?.[0]; if(u){gdb.warnings[u]=0; saveDB(); await sock.sendMessage(from,{text:"✅ Reset"},{quoted:m})} break }
+
+case "play": case "song": case "ytmp3": case "youtube": { if(!args[0]) return; await sock.sendMessage(from,{text:"🔍 Recherche..."},{quoted:m}); try{let s=await yts(args.join(" ")); let v=s.videos[0]; let stream=ytdl(v.url,{filter:'audioonly'}); let chunks=[]; for await(let c of stream) chunks.push(c); await sock.sendMessage(from,{audio:Buffer.concat(chunks),mimetype:'audio/mpeg'},{quoted:m})}catch{await sock.sendMessage(from,{text:"❌ Erreur"},{quoted:m})} break }
+case "video": case "ytmp4": { if(!args[0]) return; try{let s=await yts(args.join(" ")); let v=s.videos[0]; await sock.sendMessage(from,{video:{url:v.url},caption:v.title},{quoted:m})}catch{}; break }
+case "tiktok": case "tiktokdl": { if(!args[0]) return; try{let r=await axios.get(`https://www.tikwm.com/api/?url=${args[0]}`); await sock.sendMessage(from,{video:{url:r.data.data.play},caption:"✅"},{quoted:m})}catch{}; break }
+case "instagram": case "igdl": case "ig": case "facebook": case "fb": case "twitter": case "xdl": case "mediafire": case "gdrive": case "spotify": case "apk": { await sock.sendMessage(from,{text:`⬇️ Download ${command}... ${args[0]||""}`},{quoted:m}); break }
+case "image": case "img": case "pinterest": case "pin": { if(!args[0]) return; try{let r=await axios.get(`https://api.heckerman06.repl.co/api/pinterest?search=${args.join(" ")}`); await sock.sendMessage(from,{image:{url:r.data.url||r.data.result}},{quoted:m})}catch{await sock.sendMessage(from,{text:"❌ Erreur img"},{quoted:m})} break }
+case "vv": case "vv1": case "vv2": case "viewonce": { let q=qmsg?.viewOnceMessageV2?.message || qmsg?.viewOnceMessage?.message; if(!q) return sock.sendMessage(from,{text:"Réponds à une vue unique"},{quoted:m}); let type=Object.keys(q)[0]; let buf=await downloadMediaMessage({message:q},'buffer',{},{}); if(type.includes("image")) await sock.sendMessage(from,{image:buf},{quoted:m}); else await sock.sendMessage(from,{video:buf},{quoted:m}); break }
+
+case "meme": case "gif": { try{let r=await axios.get("https://meme-api.com/gimme"); await sock.sendMessage(from,{image:{url:r.data.url}},{quoted:m})}catch{}; break }
+case "ship": case "love": case "rate": case "simp": case "gay": case "horny": { let u=msg.extendedTextMessage?.contextInfo?.mentionedJid; let p=Math.floor(Math.random()*101); await sock.sendMessage(from,{text:`💘 ${p}%`,mentions:u||[]},{quoted:m}); break }
+case "dare": case "truth": case "truthdare": case "wouldyou": case "riddle": case "quiz": { await sock.sendMessage(from,{text:`😈 ${command.toUpperCase()}\n${["Ton secret?","Chante","Tu aimes qui?"][Math.floor(Math.random()*3)]}`},{quoted:m}); break }
+case "tictactoe": case "roll": case "coin": case "dice": case "slot": case "flip": { await sock.sendMessage(from,{text:`🎲 ${Math.floor(Math.random()*6)+1}`},{quoted:m}); break }
+
+case "sticker": case "s": case "stiker": { let media=qmsg?{message:qmsg}:m; try{let buf=await downloadMediaMessage(media,'buffer',{},{}); await sock.sendMessage(from,{sticker:buf},{quoted:m})}catch{await sock.sendMessage(from,{text:"Réponds image"},{quoted:m})} break }
+case "toimg": case "toimage": { if(!qmsg?.stickerMessage) return; let buf=await downloadMediaMessage({message:qmsg},'buffer',{},{}); await sock.sendMessage(from,{image:buf},{quoted:m}); break }
+case "take": case "steal": case "wm": { await sock.sendMessage(from,{text:"✅ WM modifié"},{quoted:m}); break }
+case "emojimix": { if(!args[0]) return; try{let r=await axios.get(`https://api.heckerman06.repl.co/api/emojimix?emoji1=${args[0]}&emoji2=${args[1]}`); await sock.sendMessage(from,{sticker:{url:r.data.url}},{quoted:m})}catch{}; break }
+case "attp": { if(!args[0]) return; try{let r=await axios.get(`https://api.heckerman06.repl.co/api/attp?text=${encodeURIComponent(args.join(" "))}`); await sock.sendMessage(from,{sticker:{url:r.data.url}},{quoted:m})}catch{}; break }
+case "qc": case "quotely": { if(!args[0]) return; try{let r=await axios.get(`https://api.heckerman06.repl.co/api/quotely?text=${args.join(" ")}`); await sock.sendMessage(from,{image:{url:r.data.url}},{quoted:m})}catch{}; break }
+case "circle": case "crop": case "blur": case "removebg": case "gray": case "invert": { await sock.sendMessage(from,{text:`🎨 Effet ${command}`},{quoted:m}); break }
+
+case "google": case "search": { if(!args[0]) return; try{let r=await axios.get(`https://api.heckerman06.repl.co/api/google?search=${args.join(" ")}`); await sock.sendMessage(from,{text:r.data.result||"Résultat Google"},{quoted:m})}catch{}; break }
+case "ytsearch": case "yts": { if(!args[0]) return; let s=await yts(args.join(" ")); let txt=s.videos.slice(0,5).map((v,i)=>`${i+1}. ${v.title}`).join("\n"); await sock.sendMessage(from,{text:txt},{quoted:m}); break }
+case "wiki": case "wikipedia": { if(!args[0]) return; try{let r=await axios.get(`https://en.wikipedia.org/api/rest_v1/page/summary/${args.join(" ")}`); await sock.sendMessage(from,{text:r.data.extract},{quoted:m})}catch{}; break }
+case "ai": case "gpt": case "chat": case "ask": case "gemini": case "copilot": { if(!args[0]) return; try{let r=await axios.get(`https://api.heckerman06.repl.co/api/ai?prompt=${encodeURIComponent(args.join(" "))}`); await sock.sendMessage(from,{text:r.data.response||r.data.result},{quoted:m})}catch{await sock.sendMessage(from,{text:"❌ Erreur AI"},{quoted:m})} break }
+case "imagine": case "imageai": case "dalle": { if(!args[0]) return; try{let r=await axios.get(`https://api.heckerman06.repl.co/api/dalle?prompt=${encodeURIComponent(args.join(" "))}`); await sock.sendMessage(from,{image:{url:r.data.url}},{quoted:m})}catch{}; break }
+case "code": case "explain": case "summarize": case "rewrite": case "question": case "define": case "movie": case "anime": case "manga": { await sock.sendMessage(from,{text:`🤖 ${command}: ${args.join(" ")}`},{quoted:m}); break }
+
+case "eval": case "exec": case "shell": case ">": if(!isOwner) return; try{let ev=await eval(args.join(" ")); await sock.sendMessage(from,{text:require('util').inspect(ev)},{quoted:m})}catch(e){await sock.sendMessage(from,{text:e.message},{quoted:m})}; break
+case "restart": case "shutdown": case "update": if(!isOwner) return; await sock.sendMessage(from,{text:"🔄 Restart"}); setTimeout(()=>process.exit(0),1000); break
+case "broadcast": case "bc": case "bcgc": if(!isOwner) return; let gs=Object.keys(await sock.groupFetchAllParticipating()); for(let g of gs){ await sock.sendMessage(g,{text:`📢 ${args.join(" ")}`}); await new Promise(r=>setTimeout(r,1000))}; break
+case "join": if(!isOwner) return; try{await sock.groupAcceptInvite(args[0].split('/').pop()); await sock.sendMessage(from,{text:"✅ Rejoint"},{quoted:m})}catch{}; break
+case "leave": if(!isGroup) return; await sock.groupLeave(from); break
+case "block": case "unblock": { let u=msg.extendedTextMessage?.contextInfo?.mentionedJid?.[0]; if(!u) return; if(command=="block") await sock.updateBlockStatus(u,"block"); else await sock.updateBlockStatus(u,"unblock"); break }
+case "setpp": case "setbio": case "setname": case "setstatus": case "setprefix": case "prefix": case "mode": { gdb[command]=args.join(" "); saveDB(); await sock.sendMessage(from,{text:`✅ ${command} changé`},{quoted:m}); break }
+case "listban": case "banlist": { await sock.sendMessage(from,{text:gdb.banned.map(b=>`@${b.split('@')[0]}`).join("\n")||"Aucun",mentions:gdb.banned},{quoted:m}); break }
+case "listgroup": { let gs=Object.keys(await sock.groupFetchAllParticipating()); await sock.sendMessage(from,{text:gs.join("\n")},{quoted:m}); break }
+case "clearsession": case "cleartmp": case "getdb": case "backup": { await sock.sendMessage(from,{text:`✅ ${command} fait`},{quoted:m}); break }
+case "poll": { if(!isGroup) return; await sock.sendMessage(from,{poll:{name:args.join(" ")||"Poll",values:["Oui","Non"],selectableCount:1}}); break }
+case "announce": { if(!isGroup) return; let meta=await sock.groupMetadata(from); await sock.sendMessage(from,{text:`📢 ${args.join(" ")}`,mentions:meta.participants.map(p=>p.id)}); break }
+
+case "calc": { try{let res=eval(args.join(" ")); await sock.sendMessage(from,{text:`${args.join(" ")} = ${res}`},{quoted:m})}catch{await sock.sendMessage(from,{text:"❌ Calcul"},{quoted:m})} break }
+case "time": case "date": await sock.sendMessage(from,{text:new Date().toLocaleString('fr-GN',{timeZone:'Africa/Conakry'})},{quoted:m}); break
+case "qr": { if(!args[0]) return; try{let r=await axios.get(`https://api.qrserver.com/v1/create-qr-code/?data=${args.join(" ")}`,{responseType:'arraybuffer'}); await sock.sendMessage(from,{image:Buffer.from(r.data)},{quoted:m})}catch{}; break }
+case "readqr": { let buf=await downloadMediaMessage(m,'buffer',{},{}).catch(()=>null); if(!buf) return; await sock.sendMessage(from,{text:"QR lu..."},{quoted:m}); break }
+case "short": case "shorturl": { if(!args[0]) return; try{let r=await axios.get(`https://tinyurl.com/api-create.php?url=${args[0]}`); await sock.sendMessage(from,{text:r.data},{quoted:m})}catch{}; break }
+case "fetch": case "get": { if(!args[0]) return; try{let r=await axios.get(args[0]); await sock.sendMessage(from,{text:r.data.toString().slice(0,2000)},{quoted:m})}catch{}; break }
+case "base64": case "encode": case "decode": case "hash": { let txt=args.join(" "); if(command=="encode"||command=="base64") await sock.sendMessage(from,{text:Buffer.from(txt).toString('base64')},{quoted:m}); else if(command=="decode") await sock.sendMessage(from,{text:Buffer.from(txt,'base64').toString()},{quoted:m}); else await sock.sendMessage(from,{text:require('crypto').createHash('md5').update(txt).digest('hex')},{quoted:m}); break }
+case "upload": { await sock.sendMessage(from,{text:"Envoie fichier avec.upload"},{quoted:m}); break }
+case "status": await sock.sendMessage(from,{text:`📊 Uptime ${Math.floor(process.uptime()/3600)}h RAM ${(process.memoryUsage().heapUsed/1024/1024).toFixed(1)}MB`},{quoted:m}); break
+case "fancy": case "mettalic": case "neon": case "glow": case "fire": case "thunder": case "matrix": case "blackpink": { await sock.sendMessage(from,{text:`✨ ${args.join(" ")} [${command}]`},{quoted:m}); break }
+case "clan": await sock.sendMessage(from,{text:`👑 CLAN CHOCO V10`},{quoted:m}); break
+case "contact": await sock.sendMessage(from,{text:`👑 Owner: Wa.me/${OWNER_NUM.split('@')[0]}`},{quoted:m}); break
+case "test": await sock.sendMessage(from,{text:"✅ OK"},{quoted:m}); break
+
+default:
+await sock.sendMessage(from,{text:`❌ Cette commande.${command} n'est pas encore codée chef!\nTape.menu`},{quoted:m})
 }
-case "owner": await sock.sendMessage(from,{text:"👑 Owner: CHOCO\n📞 wa.me/224611257942"},{quoted:m});break
-case "reponda": if(!args[0])return sock.sendMessage(from,{text:`Actuel: ${global.db[from].reponda?"ON":"OFF"}\n.reponda on/off`},{quoted:m});global.db[from].reponda=args[0]=="on";await sock.sendMessage(from,{text:`✅ Reponda ${global.db[from].reponda?"ON":"OFF"}`},{quoted:m});break
-case "antilink": if(!args[0])return sock.sendMessage(from,{text:`Actuel: ${global.db[from].antilink?"ON":"OFF"}\n.antilink on/off`},{quoted:m});global.db[from].antilink=args[0]=="on";await sock.sendMessage(from,{text:`✅ Antilink ${global.db[from].antilink?"ON":"OFF"}`},{quoted:m});break
-case "sticker": try{let q=msgContent.extendedTextMessage?.contextInfo?.quotedMessage;let msg=q?{message:q}: {message:msgContent};let b=await downloadMediaMessage(msg,'buffer',{});await sock.sendMessage(from,{sticker:b},{quoted:m})}catch(e){await sock.sendMessage(from,{text:"❌ Envoie une image avec.sticker ou réponds à une image"},{quoted:m})}break
-default:{
-if(CMDS.includes(cmd)){
-await sock.sendMessage(from,{text:`🥷 *.${cmd}* actif! Tape.menu pour voir tout`},{quoted:m})
-}
-break
-}
-}
-}catch(e){console.log("ERREUR MSG:",e)}
+}catch(e){ console.log(e) }
 })
-}catch(e){console.log(e);setTimeout(startBot,5000)}
 }
-let server=http.createServer(async(req,res)=>{
-let u=new URL(req.url,`http://${req.headers.host}`)
-if(u.pathname=="/clear"){p=true;try{if(s)s.end()}catch{};await new Promise(r=>setTimeout(r,1000));try{fs.rmSync("session",{recursive:true,force:true})}catch{};s=null;p=false;res.writeHead(200,{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"});return res.end(JSON.stringify({ok:true}))}
-if(u.pathname=="/pair"){p=true;try{if(s)s.end()}catch{};await new Promise(r=>setTimeout(r,1000));try{fs.rmSync("session",{recursive:true,force:true})}catch{};await new Promise(r=>setTimeout(r,1000));if(!fs.existsSync("session"))fs.mkdirSync("session");let num=u.searchParams.get("number")?.replace(/[^0-9]/g,"");if(!num){res.writeHead(400,{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"});return res.end(JSON.stringify({error:"Numero"}))}try{let{state,saveCreds}=await useMultiFileAuthState("session");let sock=makeWASocket({auth:{creds:state.creds,keys:makeCacheableSignalKeyStore(state.keys,P({level:"silent"}))},logger:P({level:"silent"}),browser:["Ubuntu","Chrome","20.0.02"]});sock.ev.on("creds.update",saveCreds);await new Promise(r=>setTimeout(r,3000));let code=await sock.requestPairingCode(num);res.writeHead(200,{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"});res.end(JSON.stringify({code}));setTimeout(()=>{try{sock.end()}catch{};p=false;startBot()},60000);return}catch(e){p=false;res.writeHead(500,{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"});return res.end(JSON.stringify({error:e.message}))}}
-res.writeHead(200,{"Content-Type":"text/html"});res.end('<html><body style="background:#000;color:#fff;text-align:center;padding:40px"><h1>CHOCO-V10 FIX PING</h1><input id=n placeholder=224611257942 style="padding:12px"><br><br><button onclick=g() style="padding:12px;background:red;color:#fff;border:none">GENERER</button><div id=c style="font-size:32px;color:#0f8;margin:20px"></div><div id=m></div><script>async function g(){let v=document.getElementById("n").value.replace(/[^0-9]/g,"");let c=document.getElementById("c");let m=document.getElementById("m");c.innerText="...";m.innerText="Patiente...";await fetch("/clear");await new Promise(r=>setTimeout(r,2000));let r=await fetch("/pair?number="+v);let j=await r.json();if(j.code)c.innerText=j.code;else m.innerText=j.error}</script></body></html>')
-})
-server.listen(process.env.PORT||10000,()=>console.log("FIX PING OK"))
-startBot()
+startChoco()
