@@ -1,4 +1,5 @@
-import { default as makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys"
+import pkg from "@whiskeysockets/baileys"
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = pkg
 import config from "./config.js"
 import P from "pino"
 import http from "http"
@@ -9,46 +10,48 @@ const prefix = config.PREFIX || "."
 let sockGlobal = null
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("session")
-  const sock = makeWASocket({
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
-    },
-    logger: P({ level: "silent" }),
-    browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"],
-    printQRInTerminal: false,
-    syncFullHistory: false
-  })
-  sockGlobal = sock
-  sock.ev.on("creds.update", saveCreds)
-  sock.ev.on("connection.update", (u) => {
-    if (u.connection === "close") {
-      let reason = u.lastDisconnect?.error?.output?.statusCode
-      if (reason === DisconnectReason.loggedOut) {
-        try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
+  try {
+    console.log("Démarrage bot...")
+    try { if (!fs.existsSync("session")) fs.mkdirSync("session") } catch {}
+    const { state, saveCreds } = await useMultiFileAuthState("session")
+    const sock = makeWASocket({
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
+      },
+      logger: P({ level: "silent" }),
+      browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"],
+      printQRInTerminal: false,
+      syncFullHistory: false
+    })
+    sockGlobal = sock
+    sock.ev.on("creds.update", saveCreds)
+    sock.ev.on("connection.update", (u) => {
+      if (u.connection === "close") {
+        let reason = u.lastDisconnect?.error?.output?.statusCode
+        if (reason === DisconnectReason.loggedOut) {
+          try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
+        }
+        if (reason!== DisconnectReason.loggedOut) setTimeout(startBot, 3000)
       }
-      if (reason!== DisconnectReason.loggedOut) setTimeout(startBot, 3000)
-    }
-    if (u.connection === "open") {
-      console.log("✅ CHOCO-ITACHI-V10 Connecté!")
-    }
-  })
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    try {
-      const m = messages[0]
-      if (!m.message || m.key.fromMe) return
-      const from = m.key.remoteJid
-      const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || ""
-      if (!body.startsWith(prefix)) return
-      const args = body.slice(prefix.length).trim().split(/ +/)
-      const command = args.shift().toLowerCase()
-      if (command === "menu" || command === "allmenu" || command === "help") {
-        let sec = process.uptime()
-        let h = Math.floor(sec / 3600)
-        let mi = Math.floor((sec % 3600) / 60)
-        let up = `${h}h ${mi}m`
-        let menu = `╔═〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
+      if (u.connection === "open") console.log("✅ CHOCO-ITACHI-V10 Connecté!")
+    })
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+      try {
+        const m = messages[0]
+        if (!m.message || m.key.fromMe) return
+        const from = m.key.remoteJid
+        const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || ""
+        if (!body.startsWith(prefix)) return
+        const args = body.slice(prefix.length).trim().split(/ +/)
+        const command = args.shift().toLowerCase()
+
+        if (command === "menu" || command === "allmenu" || command === "help") {
+          let sec = process.uptime()
+          let h = Math.floor(sec / 3600)
+          let mi = Math.floor((sec % 3600) / 60)
+          let up = `${h}h ${mi}m`
+          let menu = `╔═〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
 ║╭─────────────◆
 ║│ 🇬🇳*❍ 𝗠𝗘𝗡𝗨 ❍*🇬🇳
 ║╰─────────────◆
@@ -245,24 +248,24 @@ async function startBot() {
 🥷══════════════════🥷
     propulsé par *𝗖𝗛𝗢𝗖𝗢™️* 😈🍫
 🥷══════════════════🥷`;
-        try {
-          await sock.sendMessage(from, { image: { url: config.BOT_PIC }, caption: menu }, { quoted: m })
-        } catch {
-          await sock.sendMessage(from, { text: menu }, { quoted: m })
+          try {
+            await sock.sendMessage(from, { image: { url: config.BOT_PIC }, caption: menu }, { quoted: m })
+          } catch {
+            await sock.sendMessage(from, { text: menu }, { quoted: m })
+          }
         }
-      }
-      if (command === "ping") {
-        await sock.sendMessage(from, { text: `⚡ Rapide\nPong! CHOCO-ITACHI-V10 actif 🥷` }, { quoted: m })
-      }
-      if (command === "pair" || command === "share" || command === "partage") {
-        let shareText = `🔗 *CHOCO-ITACHI-V10 - PARTAGE*\n📲 Ton site: https://${process.env.RENDER_EXTERNAL_HOSTNAME || "choco-itachi-v10.onrender.com"}\n1. Ouvre ton lien\n2. Mets ton numéro 224...\n3. Clique GENERER\n4. Entre le code dans WhatsApp\n👤 Owner: ${config.ownerName || "CHOCO"}\n🥷 Bot: V10 🇬🇳\n_Propulsé par CHOCO™️_ 😈🍫`;
-        await sock.sendMessage(from, { text: shareText }, { quoted: m })
-      }
-    } catch (e) {
-      console.log(e)
-    }
-  })
+        if (command === "ping") {
+          await sock.sendMessage(from, { text: `⚡ Rapide\nPong! CHOCO-ITACHI-V10 actif 🥷` }, { quoted: m })
+        }
+        if (command === "pair" || command === "share" || command === "partage") {
+          let shareText = `🔗 *CHOCO-ITACHI-V10 - PARTAGE*\n📲 Ton site: https://${process.env.RENDER_EXTERNAL_HOSTNAME || "choco-itachi-v10.onrender.com"}\n1. Ouvre ton lien\n2. Mets ton numéro 224...\n3. Clique GENERER\n4. Entre le code dans WhatsApp\n👤 Owner: ${config.ownerName || "CHOCO"}\n🥷 Bot: V10 🇬🇳\n_Propulsé par CHOCO™️_ 😈🍫`;
+          await sock.sendMessage(from, { text: shareText }, { quoted: m })
+        }
+      } catch (e) { console.log(e) }
+    })
+  } catch (e) { console.log("ERREUR:", e); setTimeout(startBot, 5000) }
 }
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   if (url.pathname === "/clear") {
@@ -289,5 +292,6 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(200, { "Content-Type": "text/html" })
   res.end(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;box-shadow:0 0 25px #ff000066}h1{color:#ff3333;margin:0}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;font-size:18px;text-align:center;background:#2a2a2a;color:#fff}button{background:linear-gradient(90deg,#ff0000,#990000);color:#fff;border:none;padding:14px 20px;border-radius:10px;font-size:18px;width:95%;cursor:pointer;font-weight:bold}#code{font-size:34px;letter-spacing:6px;margin:20px 0;color:#00ff88;font-weight:bold;min-height:40px}#msg{color:#ccc;margin:10px 0}</style></head><body><div class="card"><h1>🥷 CHOCO-ITACHI-V10</h1><p>Site officiel de connexion</p><p>Entre ton numéro WhatsApp</p><small style="color:#aaa">Ex: 224612345678</small><input id="num" placeholder="224XXXXXXXX"/><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div><p><small>Après: WhatsApp > Paramètres > Appareils liés > Lier avec numéro de téléphone</small></p><p style="margin-top:15px;font-size:12px;color:#666">Propulsé par CHOCO™️ 😈🍫 v10</p></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');if(!n){alert('Entre ton numéro complet');return}document.getElementById('code').innerText='⏳...';document.getElementById('msg').innerText='Connexion en cours...';try{let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='✅ Code généré! Ouvre WhatsApp et entre ce code dans 60s'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=e.message}}</script></body></html>`)
 })
+
 server.listen(process.env.PORT || 10000, () => console.log("Serveur ouvert sur " + (process.env.PORT || 10000)))
 startBot()
