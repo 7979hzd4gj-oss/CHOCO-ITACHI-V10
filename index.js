@@ -12,7 +12,7 @@ welcome:false, goodbye:false, autostatus:false, autoread:false, autotyping:false
 }
 if(fs.existsSync('./database.json')){ try{gdb=JSON.parse(fs.readFileSync('./database.json'))}catch{} }
 const saveDB = ()=> fs.writeFileSync('./database.json',JSON.stringify(gdb,null,2))
-const OWNER_NUM = "224xxxxxxxxx@s.whatsapp.net"
+const OWNER_NUM = "224611257942@s.whatsapp.net"
 const PAIR_NUMBER = "224611257942"
 const badWords = ["pute","connard","fdp","fuck","shit","bitch","merde","enculé"]
 
