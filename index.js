@@ -3,8 +3,9 @@ import pino from "pino";
 import express from "express";
 import qrcode from "qrcode";
 import fs from "fs";
+import config from "./config.js";
 
-const PREFIX = ".";
+const PREFIX = config.PREFIX || config.prefix || ".";
 const PORT = process.env.PORT || 10000;
 global.CHOCO = { prot: {}, warns: {}, welcome: {}, goodbye: {}, antidemote: {}, autorec: {} };
 const LINK_RE = /https?:\/\/|www\.|chat\.whatsapp\.com|t\.me|bit\.ly|youtu\.be/i;
@@ -28,7 +29,7 @@ function startServer() {
   app.get("/", (req,res)=>{
     let status = authState?.creds?.registered? '✅ CONNECTÉ' : '⏳ EN ATTENTE';
     let qrPart = currentQR? `<img src="${currentQR}" width="260" style="border:10px solid #fff;border-radius:10px"><hr>` : `<p>⏳ Génération QR...</p><hr>`;
-    res.send(`<html><head><meta name="viewport" content="width=device-width"><style>body{background:#000;color:#fff;text-align:center;font-family:sans-serif;padding:15px}input{padding:15px;width:90%;border-radius:10px;margin:10px}button{padding:15px 30px;background:#00ff00;color:#000;border:none;border-radius:10px;font-weight:bold;font-size:18px;width:90%}h1{color:#00ff00}#code{font-size:32px;letter-spacing:4px;color:#00ff00}</style></head><body><h1>🤖 CHOCO ITACHI V10</h1><h3>261 COMMANDES + VIVI</h3>${qrPart}<input id="num" placeholder="224xxxxxxxxx"><br><button onclick="getCode()">GET CODE</button><div id="code"></div><p id="info"></p><p>Statut: ${status}</p><script>async function getCode(){let n=document.getElementById('num').value; let r=await fetch('/code?num='+n); let d=await r.json(); document.getElementById('code').innerText=d.code||d.error}</script></body></html>`);
+    res.send(`<html><head><meta name="viewport" content="width=device-width"><style>body{background:#000;color:#fff;text-align:center;font-family:sans-serif;padding:15px}input{padding:15px;width:90%;border-radius:10px;margin:10px}button{padding:15px 30px;background:#00ff00;color:#000;border:none;border-radius:10px;font-weight:bold;font-size:18px;width:90%}h1{color:#00ff00}#code{font-size:32px;letter-spacing:4px;color:#00ff00}</style></head><body><h1>🤖 ${config.BOT_NAME}</h1><h3>261 COMMANDES + VIVI</h3>${qrPart}<input id="num" placeholder="224xxxxxxxxx"><br><button onclick="getCode()">GET CODE</button><div id="code"></div><p>Statut: ${status}</p><script>async function getCode(){let n=document.getElementById('num').value; let r=await fetch('/code?num='+n); let d=await r.json(); document.getElementById('code').innerText=d.code||d.error}</script></body></html>`);
   });
   app.get("/code", async (req,res)=>{
     try{
@@ -45,23 +46,7 @@ function startServer() {
 }
 
 async function startBotLogic(sock){
-console.log("CHOCO ITACHI V10 READY");
-sock.ev.on("group-participants.update", async (u)=>{
-  try{
-    if(u.action==="add" && global.CHOCO.welcome[u.id]){
-      const txt = global.CHOCO.welcome[u.id].replace(/@user/g, `@${u.participants[0].split("@")[0]}`);
-      await sock.sendMessage(u.id,{text:txt, mentions:u.participants});
-    }
-    if(u.action==="remove" && global.CHOCO.goodbye[u.id]){
-      const txt = global.CHOCO.goodbye[u.id].replace(/@user/g, `@${u.participants[0].split("@")[0]}`);
-      await sock.sendMessage(u.id,{text:txt, mentions:u.participants});
-    }
-    if(u.action==="demote" && global.CHOCO.antidemote[u.id]){
-      await sock.groupParticipantsUpdate(u.id, u.participants, "promote");
-    }
-  }catch{}
-});
-
+console.log(`${config.BOT_NAME} READY`);
 sock.ev.on("messages.upsert", async ({messages})=>{
 const m=messages[0];
 if(!m.message) return;
@@ -74,13 +59,10 @@ if(!body) return;
 if(isFromMe &&!body.startsWith(PREFIX)) return;
 
 try{
-  const vm = m.message?.viewOnceMessage || m.message?.viewOnceMessageV2 || m.message?.viewOnceMessageV2Extension;
-  if(vm){
-    if(global.CHOCO.prot[from]?.["vivi"] || global.CHOCO.prot[from]?.["antiviewonce"]){
-      let msg = vm.message;
-      await sock.sendMessage(from,{text:`👁️ *VIVI - Vue Unique Révélée* 👤 @${sender.split("@")[0]}`, mentions:[sender]}, {quoted:m});
-      await sock.sendMessage(from,{forward: msg}, {quoted:m});
-    }
+  const vm = m.message?.viewOnceMessage || m.message?.viewOnceMessageV2;
+  if(vm && (global.CHOCO.prot[from]?.["vivi"] || global.CHOCO.prot[from]?.["antiviewonce"])){
+    await sock.sendMessage(from,{text:`👁️ *VIVI - ${config.BOT_NAME}* Révélé @${sender.split("@")[0]}`, mentions:[sender]}, {quoted:m});
+    await sock.sendMessage(from,{forward: vm.message}, {quoted:m});
   }
 }catch{}
 
@@ -92,15 +74,7 @@ if(isGroup && body){
   if(meta){
     const isAdmin=!!meta.participants.find(p=>p.id===sender)?.admin;
     const isProt=n=>global.CHOCO.prot[from]?.[n];
-    async function punish(type){
-      if(isAdmin &&!isFromMe) return;
-      await sock.sendMessage(from,{delete:m.key}).catch(()=>{});
-      const c=addWarn(from,sender,type);
-      if(c>=3) resetWarn(from,sender,type);
-    }
-    if(isProt("antilink")&&LINK_RE.test(body)) await punish("antilink");
-    if(isProt("antibadword")&&BADWORD.some(w=>low.includes(w))) await punish("antibadword");
-    if(isProt("antimarabou")&&MARABOU.some(w=>low.includes(w))) await punish("antimarabou");
+    if(isProt("antilink")&&LINK_RE.test(body) &&!isAdmin) await sock.sendMessage(from,{delete:m.key}).catch(()=>{});
   }
 }
 if(!body.startsWith(PREFIX)) return;
@@ -109,16 +83,12 @@ const args=body.slice(PREFIX.length).trim().split(/ +/); const cmd=args.shift().
 if(cmd==="vv"||cmd==="vv1"||cmd==="vv2"||cmd==="viewonce"||cmd==="vivi"){
   if(cmd==="vivi" && (args[0]==="on"||args[0]==="off")){
     if(!global.CHOCO.prot[from]) global.CHOCO.prot[from]={};
-    if(args[0]==="on"){ global.CHOCO.prot[from]["vivi"]=true; return sock.sendMessage(from,{text:"✅ *VIVI ACTIVÉ* - Vue unique révélée auto"},{quoted:m}); }
-    else{ delete global.CHOCO.prot[from]["vivi"]; return sock.sendMessage(from,{text:"❌ *VIVI DÉSACTIVÉ* "},{quoted:m}); }
+    if(args[0]==="on"){ global.CHOCO.prot[from]["vivi"]=true; return sock.sendMessage(from,{text:`✅ *VIVI ACTIVÉ*`},{quoted:m}); }
+    else{ delete global.CHOCO.prot[from]["vivi"]; return sock.sendMessage(from,{text:`❌ *VIVI DÉSACTIVÉ*`},{quoted:m}); }
   }
-  const q = quotedMsg?.viewOnceMessage || quotedMsg?.viewOnceMessageV2 || quotedMsg?.viewOnceMessageV2Extension;
-  if(q){
-    const msg = q.message;
-    await sock.sendMessage(from,{forward: msg},{quoted:m});
-  }else{
-    await sock.sendMessage(from,{text:"❌ Réponds à une photo vue unique avec.vv"},{quoted:m});
-  }
+  const q = quotedMsg?.viewOnceMessage || quotedMsg?.viewOnceMessageV2;
+  if(q){ await sock.sendMessage(from,{forward: q.message},{quoted:m}); }
+  else{ await sock.sendMessage(from,{text:"❌ Réponds à une vue unique avec.vv"},{quoted:m}); }
   return;
 }
 
@@ -132,13 +102,13 @@ if(ALL_PROT.includes(cmd)){
 
 if(cmd==="menu"||cmd==="help"){
 const time = new Date().toLocaleTimeString("fr-FR",{hour:'2-digit',minute:'2-digit'});
-const txt = `╭━━『 *CHOCO-ITACHI-V10 😈🍫* 』━⬣
-┃ ✨ *Bot: CHOCO-ITACHI-V10 😈🍫*
-┃ 🍫 *Prefix:.*
+const txt = `╭━━『 *${config.BOT_NAME} 😈🍫* 』━⬣
+┃ ✨ *Bot: ${config.BOT_NAME}*
+┃ 🍫 *Prefix: ${PREFIX}*
 ┃ 📦 *Plugin: 261*
-┃ 💎 *Version: 10.0.0*
+┃ 💎 *Version: ${config.version}*
 ┃ ⏰ *Time: ${time}*
-┃ 👑 *By: 224611257942*
+┃ 👑 *By: ${config.ownerNumber} ${config.country}*
 ┃━━━ *GENERAL* ━✦
 ┃ ➤.menu
 ┃ ➤.help
@@ -148,27 +118,9 @@ const txt = `╭━━『 *CHOCO-ITACHI-V10 😈🍫* 』━⬣
 ┃ ➤.owner
 ┃ ➤.info
 ┃ ➤.botinfo
-┃ ➤.contact
-┃ ➤.repo
-┃ ➤.github
-┃ ➤.sc
-┃ ➤.test
 ┃ ➤.id
 ┃ ➤.gjid
-┃ ➤.url
-┃ ➤.linkwa
 ┃ ➤.groupinfo
-┃ ➤.staff
-┃ ➤.weather
-┃ ➤.news
-┃ ➤.fact
-┃ ➤.quote
-┃ ➤.joke
-┃ ➤.8ball
-┃ ➤.lyrics
-┃ ➤.trt
-┃ ➤.ss
-┃ ➤.attp
 ┃━━━ *ADMIN* ━✦
 ┃ ➤.open
 ┃ ➤.close
@@ -180,222 +132,69 @@ const txt = `╭━━『 *CHOCO-ITACHI-V10 😈🍫* 』━⬣
 ┃ ➤.mute
 ┃ ➤.unmute
 ┃ ➤.delete
-┃ ➤.clear
 ┃ ➤.tagall
 ┃ ➤.tag
 ┃ ➤.hidetag
 ┃ ➤.add
-┃ ➤.remove
 ┃ ➤.setgname
 ┃ ➤.setgpp
-┃ ➤.kickall
-┃ ➤.purge
-┃ ➤.approve
-┃ ➤.invite
-┃ ➤.grouplink
-┃ ➤.revoke
-┃ ➤.totalmembers
-┃ ➤.sanction
-┃ ➤.signal
-┃ ➤.autorecording
-┃ ➤.antidemote
-┃ ➤.gstatus
-┃ ➤.link
 ┃ ➤.welcome
 ┃ ➤.goodbye
-┃ ➤.setwelcome
-┃ ➤.setgoodbye
 ┃━━━ *PROTECTION* ━✦
 ┃ ➤.antilink
 ┃ ➤.antibadword
 ┃ ➤.antibot
-┃ ➤.antileave
 ┃ ➤.antimention
 ┃ ➤.antisticker
 ┃ ➤.antitag
-┃ ➤.anticall
 ┃ ➤.antidelete
-┃ ➤.antipurge
 ┃ ➤.antimarabou
-┃ ➤.antistatut
-┃ ➤.antifake
-┃ ➤.antispam
 ┃ ➤.antiviewonce
-┃ ➤.antigroup
+┃ ➤.vivi
 ┃ ➤.antivoice
 ┃ ➤.antifile
-┃ ➤.antishare
 ┃ ➤.antiflood
-┃ ➤.antiedit
-┃ ➤.antichannel
-┃ ➤.vivi
-┃━━━ *GROUP* ━✦
-┃ ➤.group
-┃ ➤.setdesc
-┃ ➤.setsubject
-┃ ➤.getgpp
-┃ ➤.getdesc
-┃ ➤.admins
-┃ ➤.members
-┃ ➤.list
-┃ ➤.poll
-┃ ➤.announce
-┃ ➤.welcome
-┃ ➤.goodbye
 ┃━━━ *DOWNLOAD + VIVI* ━✦
 ┃ ➤.play
 ┃ ➤.song
 ┃ ➤.video
-┃ ➤.ytmp3
-┃ ➤.ytmp4
-┃ ➤.youtube
 ┃ ➤.tiktok
-┃ ➤.tiktokdl
 ┃ ➤.instagram
-┃ ➤.igdl
 ┃ ➤.facebook
-┃ ➤.fb
-┃ ➤.twitter
-┃ ➤.xdl
 ┃ ➤.mediafire
-┃ ➤.gdrive
 ┃ ➤.apk
-┃ ➤.image
-┃ ➤.pinterest
-┃ ➤.pin
-┃ ➤.spotify
-┃ ➤.spotifydl
-┃ ➤.soundcloud
 ┃ ➤.vv
 ┃ ➤.vv1
 ┃ ➤.vv2
 ┃ ➤.viewonce
 ┃ ➤.vivi on
 ┃ ➤.vivi off
-┃━━━ *FUN* ━✦
-┃ ➤.meme
-┃ ➤.gif
+┃━━━ *FUN / STICKER / IA* ━✦
 ┃ ➤.sticker
-┃ ➤.s
-┃ ➤.take
-┃ ➤.emojimix
-┃ ➤.ship
-┃ ➤.love
-┃ ➤.rate
-┃ ➤.simp
-┃ ➤.gay
-┃ ➤.horny
-┃ ➤.dare
-┃ ➤.truth
-┃ ➤.roll
-┃ ➤.coin
-┃ ➤.dice
-┃ ➤.slot
-┃━━━ *STICKER* ━✦
-┃ ➤.sticker
-┃ ➤.s
-┃ ➤.stiker
 ┃ ➤.toimg
-┃ ➤.toimage
-┃ ➤.take
-┃ ➤.steal
-┃ ➤.wm
-┃ ➤.circle
-┃ ➤.crop
-┃ ➤.blur
-┃ ➤.removebg
-┃ ➤.qc
-┃ ➤.attp
-┃━━━ *SEARCH* ━✦
-┃ ➤.google
-┃ ➤.search
-┃ ➤.ytsearch
-┃ ➤.yts
-┃ ➤.image
-┃ ➤.img
-┃ ➤.wiki
-┃ ➤.wikipedia
-┃ ➤.news
-┃ ➤.weather
-┃ ➤.define
-┃ ➤.translate
-┃ ➤.lyrics
-┃ ➤.movie
-┃ ➤.anime
-┃ ➤.manga
-┃━━━ *IA* ━✦
+┃ ➤.meme
 ┃ ➤.ai
 ┃ ➤.gpt
-┃ ➤.chat
-┃ ➤.ask
-┃ ➤.gemini
-┃ ➤.copilot
 ┃ ➤.imagine
-┃ ➤.imageai
-┃ ➤.translate
-┃ ➤.summarize
-┃ ➤.rewrite
-┃ ➤.code
-┃ ➤.explain
-┃ ➤.question
 ┃━━━ *OWNER* ━✦
 ┃ ➤.eval
-┃ ➤.exec
-┃ ➤.shell
 ┃ ➤.restart
-┃ ➤.shutdown
-┃ ➤.update
-┃ ➤.setprefix
-┃ ➤.prefix
 ┃ ➤.broadcast
-┃ ➤.bc
-┃ ➤.join
-┃ ➤.leave
-┃ ➤.block
-┃ ➤.unblock
-┃ ➤.setbio
-┃ ➤.setname
 ┃ ➤.setpp
-┃ ➤.setstatus
-┃ ➤.listban
-┃ ➤.listgroup
-┃ ➤.clearsession
-┃━━━ *UTILITIES* ━✦
-┃ ➤.calc
-┃ ➤.time
-┃ ➤.date
-┃ ➤.qr
-┃ ➤.readqr
-┃ ➤.short
-┃ ➤.shorturl
-┃ ➤.url
-┃ ➤.fetch
-┃ ➤.get
-┃ ➤.upload
-┃ ➤.tourl
-┃ ➤.base64
-┃ ➤.encode
-┃ ➤.decode
-┃ ➤.hash
-┃ ➤.screenshot
-╰━━━━━━━ By 224611257942 ━━━━━⬣`;
-
+╰━━━━━━━ By ${config.ownerNumber} ━━━━━⬣`;
 if(fs.existsSync('./menu.jpg')){
   await sock.sendMessage(from,{image: fs.readFileSync('./menu.jpg'), caption: txt},{quoted:m});
 }else{
   await sock.sendMessage(from,{text:txt},{quoted:m});
 }
 }
-
-if(cmd==="ping") await sock.sendMessage(from,{text:`🏓 PONG - CHOCO ITACHI V10 ONLINE`},{quoted:m});
-if(cmd==="alive") await sock.sendMessage(from,{text:`✅ CHOCO ITACHI V10 ONLINE 24h/24 - 261 CMDS`},{quoted:m});
 });
 }
 
 async function startV10(){
   const { state, saveCreds } = await useMultiFileAuthState("./session");
   authState = state;
-  const sock = makeWASocket({ auth: state, logger: pino({level:"silent"}), browser: ["Chrome","Chrome","120.0.0"], syncFullHistory: false });
+  const sock = makeWASocket({ auth: state, logger: pino({level:"silent"}), browser: ["Chrome","Chrome","120.0.0"] });
   sockInstance = sock;
   sock.ev.on("creds.update", saveCreds);
   startServer();
