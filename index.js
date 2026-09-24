@@ -2,13 +2,13 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req, res) => res.send('CHOCO ITACHI V10 ONLINE 🔥'));
-app.listen(PORT, () => console.log('Server running on ' + PORT));
+app.listen(PORT, () => console.log('Server on ' + PORT));
 
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys')
-const pino = require('pino')
-const fs = require('fs')
-const axios = require('axios')
-const yts = require('yt-search')
+const fs = require('fs');
+const pino = require('pino');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const axios = require('axios');
+const yts = require('yt-search');
 const ytdl = require('@distube/ytdl-core')
 let gdb = {
 warnings:{}, banned:[], mode:"public", prefix:".",
