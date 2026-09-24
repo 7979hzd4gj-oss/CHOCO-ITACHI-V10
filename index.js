@@ -25,38 +25,28 @@ let serverStarted = false;
 function startServer() {
   if(serverStarted) return;
   serverStarted = true;
-
   app.get("/", (req,res)=>{
     let status = authState?.creds?.registered? '✅ CONNECTÉ' : '⏳ EN ATTENTE';
     let qrPart = '';
     if(currentQR){
       qrPart = `<img src="${currentQR}" width="260" style="border:10px solid #fff;border-radius:10px"><br><p>Scanne avec WhatsApp iPhone<br>Appareils liés > Lier un appareil</p><hr>`;
     } else if(!authState?.creds?.registered) {
-      qrPart = `<p style="color:yellow">⏳ Génération QR... rafraichis la page dans 5s</p><hr>`;
+      qrPart = `<p style="color:yellow">⏳ Génération QR... rafraichis dans 5s</p><hr>`;
     }
-    res.send(`<html><head><meta name="viewport" content="width=device-width"><style>body{background:#000;color:#fff;text-align:center;font-family:sans-serif;padding:15px}input{padding:15px;width:90%;border-radius:10px;margin:10px}button{padding:15px 30px;background:#00ff00;color:#000;border:none;border-radius:10px;font-weight:bold;font-size:18px;width:90%}h1{color:#00ff00}#code{font-size:32px;letter-spacing:4px;margin-top:20px;color:#00ff00;font-weight:bold}</style></head><body><h1>🤖 CHOCO ITACHI V10</h1><h3>261 CMDS ALIGNÉ</h3>${qrPart}<input id="num" placeholder="224xxxxxxxxx"><br><br><button onclick="getCode()">GET CODE</button><div id="code"></div><p id="info" style="color:yellow"></p><p>Statut: ${status}</p><script>async function getCode(){let n=document.getElementById('num').value; document.getElementById('info').innerText='Génération... attends 5s'; let r=await fetch('/code?num='+n); let d=await r.json(); if(d.code){document.getElementById('code').innerText=d.code; document.getElementById('info').innerText='Copie vite dans WhatsApp! 60s max';}else{document.getElementById('info').innerText=d.error}}</script></body></html>`);
+    res.send(`<html><head><meta name="viewport" content="width=device-width"><style>body{background:#000;color:#fff;text-align:center;font-family:sans-serif;padding:15px}input{padding:15px;width:90%;border-radius:10px;margin:10px}button{padding:15px 30px;background:#00ff00;color:#000;border:none;border-radius:10px;font-weight:bold;font-size:18px;width:90%}h1{color:#00ff00}#code{font-size:32px;letter-spacing:4px;margin-top:20px;color:#00ff00;font-weight:bold}</style></head><body><h1>🤖 CHOCO ITACHI V10</h1><h3>261 CMDS ALIGNÉ</h3>${qrPart}<input id="num" placeholder="224xxxxxxxxx"><br><br><button onclick="getCode()">GET CODE</button><div id="code"></div><p id="info" style="color:yellow"></p><p>Statut: ${status}</p><script>async function getCode(){let n=document.getElementById('num').value; document.getElementById('info').innerText='Génération...'; let r=await fetch('/code?num='+n); let d=await r.json(); if(d.code){document.getElementById('code').innerText=d.code; document.getElementById('info').innerText='Copie vite! 60s max';}else{document.getElementById('info').innerText=d.error}}</script></body></html>`);
   });
-
-  // ✅ FIX PAIR CODE DEFINITIF + QR
   app.get("/code", async (req,res)=>{
     try{
       let num=req.query.num?.replace(/[^0-9]/g,"");
       if(!num) return res.json({error:"Mets numéro ex: 224611257942"});
-      if(!sockInstance ||!authState) return res.json({error:"Bot démarre... attends 10s et réessaye"});
+      if(!sockInstance ||!authState) return res.json({error:"Bot démarre... attends 10s"});
       if(authState.creds.registered) return res.json({error:"Déjà connecté ✅"});
-
-      console.log(`Demande code pour ${num}...`);
-      await delay(3000);
+      await delay(2000);
       let code = await sockInstance.requestPairingCode(num);
-      console.log(`CODE POUR ${num}: ${code}`);
       res.json({code});
-    }catch(e){
-      console.log("Erreur code:", e.message);
-      res.json({error: e.message + " - Si ça bloque, utilise le QR CODE au-dessus! Le QR marche toujours"});
-    }
+    }catch(e){ res.json({error: e.message}); }
   });
-
-  app.listen(PORT, '0.0.0.0', ()=>console.log(`🌐 SITE: http://0.0.0.0:${PORT}`));
+  app.listen(PORT, '0.0.0.0', ()=>console.log(`🌐 SITE: ${PORT}`));
 }
 
 async function startBotLogic(sock){
@@ -79,10 +69,18 @@ sock.ev.on("group-participants.update", async (u)=>{
 });
 
 sock.ev.on("messages.upsert", async ({messages})=>{
-const m=messages[0]; if(!m.message||m.key.fromMe) return;
-const from=m.key.remoteJid; const isGroup=from.endsWith("@g.us");
+const m=messages[0];
+if(!m.message) return;
+const from=m.key.remoteJid;
+const isGroup=from.endsWith("@g.us");
 const sender=isGroup?m.key.participant:from;
+const isFromMe = m.key.fromMe;
 const body=m.message?.conversation||m.message?.extendedTextMessage?.text||m.message?.imageMessage?.caption||m.message?.videoMessage?.caption||"";
+if(!body) return;
+console.log(`MSG [${isGroup?'GROUPE':'PV'}] FROMME=${isFromMe} => ${body}`);
+// ✅ FIX: On autorise les commandes même si c'est toi
+if(isFromMe &&!body.startsWith(PREFIX)) return;
+
 const low=body.toLowerCase();
 const qInfo=m.message?.extendedTextMessage?.contextInfo; const mentioned=qInfo?.mentionedJid||[];
 if(global.CHOCO.autorec[from]) await sock.sendPresenceUpdate("recording", from);
@@ -93,7 +91,7 @@ if(isGroup && body){
     const isBotAdmin=!!meta.participants.find(p=>p.id===sock.user.id)?.admin;
     const isProt=n=>global.CHOCO.prot[from]?.[n];
     async function punish(type, reason){
-      if(isAdmin) return;
+      if(isAdmin &&!isFromMe) return;
       await sock.sendMessage(from,{delete:m.key}).catch(()=>{});
       const c=addWarn(from,sender,type);
       if(c>=3){
@@ -114,7 +112,7 @@ if(isGroup && body){
   }
 }
 if(!body.startsWith(PREFIX)) return;
-const args=body.slice(PREFIX.length).trim().split(/ +/); const cmd=args.shift().toLowerCase(); const text=args.join(" ");
+const args=body.slice(PREFIX.length).trim().split(/ +/); const cmd=args.shift().toLowerCase();
 if(ALL_PROT.includes(cmd)){
   if(!isGroup) return sock.sendMessage(from,{text:"❌ Groupe seulement"},{quoted:m});
   if(!global.CHOCO.prot[from]) global.CHOCO.prot[from]={};
@@ -122,9 +120,9 @@ if(ALL_PROT.includes(cmd)){
   if(args[0]==="off"){ delete global.CHOCO.prot[from][cmd]; return sock.sendMessage(from,{text:`❌ *${cmd.toUpperCase()} DÉSACTIVÉ*`},{quoted:m}); }
   return sock.sendMessage(from,{text:`Usage: ${PREFIX}${cmd} on/off`},{quoted:m});
 }
-if(cmd==="menu"||cmd==="help"){ const now=new Date(); await sock.sendMessage(from,{text:`*┏ CHOCO ITACHI V10 ┓*\n261 CMDS\nDate: ${now.toLocaleDateString("fr-FR")}\n\n.menumods\n.ping\n.alive\n.id\n.open\n.close\n.tagall\n\nProtections: ${ALL_PROT.join(", ")}`},{quoted:m}); }
-if(cmd==="ping") await sock.sendMessage(from,{text:`🏓 PONG ${Date.now()%1000}ms`},{quoted:m});
-if(cmd==="alive") await sock.sendMessage(from,{text:`✅ ONLINE`},{quoted:m});
+if(cmd==="menu"||cmd==="help"){ const now=new Date(); await sock.sendMessage(from,{text:`*┏ CHOCO ITACHI V10 ┓*\n261 CMDS\nDate: ${now.toLocaleDateString("fr-FR")}\n\n.ping\n.alive\n.menu\n.open\n.close\n.tagall\n\nProtections: ${ALL_PROT.join(", ")}`},{quoted:m}); }
+if(cmd==="ping") await sock.sendMessage(from,{text:`🏓 PONG ${Date.now()%1000}ms - CHOCO V10 ONLINE`},{quoted:m});
+if(cmd==="alive") await sock.sendMessage(from,{text:`✅ CHOCO ITACHI V10 ONLINE 24h/24`},{quoted:m});
 });
 }
 
@@ -132,8 +130,6 @@ async function startV10(){
   const { state, saveCreds } = await useMultiFileAuthState("./session");
   authState = state;
   saveCredsGlobal = saveCreds;
-
-  // ✅ FIX IMPORTANT: browser Chrome pour éviter blocage Pair Code
   const sock = makeWASocket({
     auth: state,
     logger: pino({level:"silent"}),
@@ -143,23 +139,11 @@ async function startV10(){
   sockInstance = sock;
   sock.ev.on("creds.update", saveCreds);
   startServer();
-
   sock.ev.on("connection.update", async (u)=>{
     const { connection, qr } = u;
-    if(qr){
-      currentQR = await qrcode.toDataURL(qr);
-      console.log("✅ QR généré - Va sur ton site pour scanner");
-    }
-    if(connection==="open"){
-      currentQR = null;
-      console.log("✅ CHOCO ITACHI V10 ALIGNÉ CONNECTÉ!");
-      startBotLogic(sock);
-    }
-    if(connection==="close"){
-      console.log("Fermé, reconnexion 5s...");
-      await delay(5000);
-      startV10();
-    }
+    if(qr){ currentQR = await qrcode.toDataURL(qr); console.log("✅ QR généré"); }
+    if(connection==="open"){ currentQR = null; console.log("✅ CONNECTÉ!"); startBotLogic(sock); }
+    if(connection==="close"){ console.log("Fermé, reco 5s..."); await delay(5000); startV10(); }
   });
   if(state.creds.registered) startBotLogic(sock);
 }
