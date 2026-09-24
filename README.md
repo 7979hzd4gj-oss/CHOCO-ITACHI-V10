@@ -1,8 +1,3 @@
-Compris chef! 🔥 Tu veux *le même design que MEGA-MD* que tu as envoyé, mais *modifié à ta manière CHOCO-ITACHI-V10*!
-
-Voilà la copie exacte mais 100% à toi chef - avec ton nom, ton numéro `224611257942`, ton bot:
-
-Colle ça dans ton `README.md`:
 
 <div align="center">
 
