@@ -1,6 +1,7 @@
 import makeWASocket, { useMultiFileAuthState, delay } from "@whiskeysockets/baileys";
 import pino from "pino";
 import express from "express";
+import qrcode from "qrcode";
 
 const PREFIX = ".";
 const PORT = process.env.PORT || 10000;
@@ -18,6 +19,7 @@ app.use(express.json());
 let sockInstance = null;
 let authState = null;
 let saveCredsGlobal = null;
+let currentQR = null;
 let serverStarted = false;
 
 function startServer() {
@@ -25,25 +27,32 @@ function startServer() {
   serverStarted = true;
 
   app.get("/", (req,res)=>{
-    res.send(`<html><head><meta name="viewport" content="width=device-width"><style>body{background:#000;color:#fff;text-align:center;font-family:sans-serif;padding:15px}input{padding:15px;width:90%;border-radius:10px;margin:10px}button{padding:15px 30px;background:#00ff00;color:#000;border:none;border-radius:10px;font-weight:bold;font-size:18px;width:90%}h1{color:#00ff00}#code{font-size:32px;letter-spacing:4px;margin-top:20px;color:#00ff00;font-weight:bold}</style></head><body><h1>🤖 CHOCO ITACHI V10</h1><h3>261 CMDS ALIGNÉ</h3><input id="num" placeholder="224xxxxxxxxx"><br><br><button onclick="getCode()">GET CODE</button><div id="code"></div><p id="info" style="color:yellow"></p><p>Statut: ${authState?.creds?.registered? '✅ CONNECTÉ' : '⏳ EN ATTENTE'}</p><script>async function getCode(){let n=document.getElementById('num').value; document.getElementById('info').innerText='Génération... attends 5s'; let r=await fetch('/code?num='+n); let d=await r.json(); if(d.code){document.getElementById('code').innerText=d.code; document.getElementById('info').innerText='Copie vite dans WhatsApp! 60s max';}else{document.getElementById('info').innerText=d.error}}</script></body></html>`);
+    let status = authState?.creds?.registered? '✅ CONNECTÉ' : '⏳ EN ATTENTE';
+    let qrPart = '';
+    if(currentQR){
+      qrPart = `<img src="${currentQR}" width="260" style="border:10px solid #fff;border-radius:10px"><br><p>Scanne avec WhatsApp iPhone<br>Appareils liés > Lier un appareil</p><hr>`;
+    } else if(!authState?.creds?.registered) {
+      qrPart = `<p style="color:yellow">⏳ Génération QR... rafraichis la page dans 5s</p><hr>`;
+    }
+    res.send(`<html><head><meta name="viewport" content="width=device-width"><style>body{background:#000;color:#fff;text-align:center;font-family:sans-serif;padding:15px}input{padding:15px;width:90%;border-radius:10px;margin:10px}button{padding:15px 30px;background:#00ff00;color:#000;border:none;border-radius:10px;font-weight:bold;font-size:18px;width:90%}h1{color:#00ff00}#code{font-size:32px;letter-spacing:4px;margin-top:20px;color:#00ff00;font-weight:bold}</style></head><body><h1>🤖 CHOCO ITACHI V10</h1><h3>261 CMDS ALIGNÉ</h3>${qrPart}<input id="num" placeholder="224xxxxxxxxx"><br><br><button onclick="getCode()">GET CODE</button><div id="code"></div><p id="info" style="color:yellow"></p><p>Statut: ${status}</p><script>async function getCode(){let n=document.getElementById('num').value; document.getElementById('info').innerText='Génération... attends 5s'; let r=await fetch('/code?num='+n); let d=await r.json(); if(d.code){document.getElementById('code').innerText=d.code; document.getElementById('info').innerText='Copie vite dans WhatsApp! 60s max';}else{document.getElementById('info').innerText=d.error}}</script></body></html>`);
   });
 
-  // ✅ FIX PAIR CODE DEFINITIF
+  // ✅ FIX PAIR CODE DEFINITIF + QR
   app.get("/code", async (req,res)=>{
     try{
       let num=req.query.num?.replace(/[^0-9]/g,"");
-      if(!num) return res.json({error:"Mets numéro ex: 224612345678"});
+      if(!num) return res.json({error:"Mets numéro ex: 224611257942"});
       if(!sockInstance ||!authState) return res.json({error:"Bot démarre... attends 10s et réessaye"});
       if(authState.creds.registered) return res.json({error:"Déjà connecté ✅"});
 
       console.log(`Demande code pour ${num}...`);
-      await delay(2000); // laisse le socket se préparer
+      await delay(3000);
       let code = await sockInstance.requestPairingCode(num);
       console.log(`CODE POUR ${num}: ${code}`);
       res.json({code});
     }catch(e){
       console.log("Erreur code:", e.message);
-      res.json({error: e.message + " - Attends 20s et réessaye 1 fois"});
+      res.json({error: e.message + " - Si ça bloque, utilise le QR CODE au-dessus! Le QR marche toujours"});
     }
   });
 
@@ -124,14 +133,33 @@ async function startV10(){
   authState = state;
   saveCredsGlobal = saveCreds;
 
-  const sock = makeWASocket({ auth: state, logger: pino({level:"silent"}), browser:["CHOCO ITACHI V10","Chrome","1.0"] });
+  // ✅ FIX IMPORTANT: browser Chrome pour éviter blocage Pair Code
+  const sock = makeWASocket({
+    auth: state,
+    logger: pino({level:"silent"}),
+    browser: ["Chrome", "Chrome", "120.0.0"],
+    syncFullHistory: false
+  });
   sockInstance = sock;
   sock.ev.on("creds.update", saveCreds);
   startServer();
 
   sock.ev.on("connection.update", async (u)=>{
-    if(u.connection==="open"){ console.log("✅ CHOCO ITACHI V10 ALIGNÉ CONNECTÉ!"); startBotLogic(sock); }
-    if(u.connection==="close"){ console.log("Fermé, reconnexion 5s..."); await delay(5000); startV10(); }
+    const { connection, qr } = u;
+    if(qr){
+      currentQR = await qrcode.toDataURL(qr);
+      console.log("✅ QR généré - Va sur ton site pour scanner");
+    }
+    if(connection==="open"){
+      currentQR = null;
+      console.log("✅ CHOCO ITACHI V10 ALIGNÉ CONNECTÉ!");
+      startBotLogic(sock);
+    }
+    if(connection==="close"){
+      console.log("Fermé, reconnexion 5s...");
+      await delay(5000);
+      startV10();
+    }
   });
   if(state.creds.registered) startBotLogic(sock);
 }
