@@ -95,7 +95,6 @@ async function startBot() {
 ║ ⿻.restore → restaurer config
 ║ ⿻.clan → gerer un clan
 ╚══════════════════❒
-
 ╔══════════════════🥷
 ║ ❍𝗔𝗗𝗠𝗜𝗡-𝗖𝗛𝗢𝗖𝗢❍
 ║ ⿻.open → ouvrir le groupe
@@ -127,7 +126,6 @@ async function startBot() {
 ║ ⿻.sanction → sanctionner mmb
 ║ ⿻.autorecording → simulation
 ╚══════════════════❒
-
 ╔══════════════════🥷
 ║ ❍ 𝗣𝗥𝗢𝗧𝗘𝗖𝗧𝗜𝗢𝗡-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.antilink → anti-lien
@@ -143,7 +141,6 @@ async function startBot() {
 ║ ⿻.antipurge → anti-purge abusive
 ║ ⿻.antimarabout → anti-arnaques
 ╚══════════════════❒
-
 ╔══════════════════🥷
 ║ ❍ 𝗢𝗪𝗡𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.self → mode solo
@@ -170,7 +167,6 @@ async function startBot() {
 ║ ⿻.autobio → bio automatique
 ║ ⿻.maintenance → mode mtc
 ╚══════════════════❒
-
 ╔══════════════════🥷
 ║ ❍ 𝗘𝗗𝗜𝗧𝗜𝗡𝗚-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.sticker → creer sticker
@@ -189,7 +185,6 @@ async function startBot() {
 ║ ⿻.igs → story instagram
 ║ ⿻.igsc → commentaires IG
 ╚══════════════════❒
-
 ╔══════════════════🥷
 ║ ❍ 𝗔𝗜 & 𝗚𝗔𝗠𝗘𝗦-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.ai → intelligence IA
@@ -210,7 +205,6 @@ async function startBot() {
 ║ ⿻.dare → action
 ║ ⿻.drague → phrases de drague
 ╚══════════════════❒
-
 ╔══════════════════🥷
 ║ ❍ 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.play → jouer musique
@@ -222,7 +216,6 @@ async function startBot() {
 ║ ⿻.tiktok → telecharger TikTok
 ║ ⿻.lyrics → paroles musique
 ╚══════════════════❒
-
 ╔══════════════════🥷
 ║ ❍ 𝗧𝗘𝗫𝗧𝗠𝗔𝗞𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.neon → texte neon
@@ -235,7 +228,6 @@ async function startBot() {
 ║ ⿻.devil → style demon
 ║ ⿻.sand → texte sable
 ╚══════════════════❒
-
 ╔══════════════════🥷
 ║ ❍ 𝗦𝗬𝗦𝗧𝗘𝗠-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.git → info git
@@ -247,7 +239,6 @@ async function startBot() {
 ║ ⿻.footballnews → actus football
 ║ ⿻.itachi-info → histoire Itachi
 ╚═══════════════════❒
-
 🥷══════════════════🥷
     propulsé par *𝗖𝗛𝗢𝗖𝗢™️* 😈🍫
 🥷══════════════════🥷`;
@@ -266,45 +257,44 @@ async function startBot() {
       if (command === "pair" || command === "share" || command === "partage") {
         let shareText = `🔗 *CHOCO-ITACHI-V10 - PARTAGE*
 
-📲 Ton site de pairing: https://${process.env.RENDER_EXTERNAL_HOSTNAME || "choco-itachi-v10.onrender.com"}
-
-1. Ouvre ton lien Render
+📲 Ton site: https://${process.env.RENDER_EXTERNAL_HOSTNAME || "choco-itachi-v10.onrender.com"}
+1. Ouvre ton lien
 2. Mets ton numéro 224...
 3. Clique GENERER
-4. Entre le code dans WhatsApp > Appareils liés > Lier avec numéro
+4. Entre le code dans WhatsApp
 
 👤 Owner: ${config.ownerName || "CHOCO"}
 🥷 Bot: V10 🇬🇳
-
 _Propulsé par CHOCO™️_ 😈🍫`;
         await sock.sendMessage(from, { text: shareText }, { quoted: m })
       }
-    } catch(e){ console.log(e) }
+    } catch (e) {
+      console.log(e)
+    }
   })
 }
 
-// SERVEUR SITE PAIRING
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   if (url.pathname === "/pair") {
     const number = url.searchParams.get("number")?.replace(/[^0-9]/g, "")
     if (!number ||!sockGlobal) {
-      res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin":"*" })
+      res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       return res.end(JSON.stringify({ error: "Bot pas prêt, attends 10s" }))
     }
     try {
       const code = await sockGlobal.requestPairingCode(number)
       console.log(`CODE pour ${number}: ${code}`)
-      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin":"*" })
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       return res.end(JSON.stringify({ code }))
-    } catch(e){
-      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin":"*" })
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       return res.end(JSON.stringify({ error: e.message }))
     }
   }
   res.writeHead(200, { "Content-Type": "text/html" })
-  res.end(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;box-shadow:0 0 25px #ff000066}h1{color:#ff3333;margin:0}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;font-size:18px;text-align:center;background:#2a2a2a;color:#fff}button{background:linear-gradient(90deg,#ff0000,#990000);color:#fff;border:none;padding:14px 20px;border-radius:10px;font-size:18px;width:95%;cursor:pointer;font-weight:bold}button:hover{opacity:0.8}#code{font-size:34px;letter-spacing:6px;margin:20px 0;color:#00ff88;font-weight:bold;min-height:40px}#msg{color:#ccc;margin:10px 0}</style></head><body><div class="card"><h1>🥷 CHOCO-ITACHI-V10</h1><p>Site officiel de connexion</p><p>Entre ton numéro WhatsApp</p><small style="color:#aaa">Ex: 224612345678</small><input id="num" placeholder="224XXXXXXXX"/><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div><p><small>Après: WhatsApp > Paramètres > Appareils liés > Lier avec numéro de téléphone</small></p><p style="margin-top:15px;font-size:12px;color:#666">Propulsé par CHOCO™️ 😈🍫 v10</p></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');if(!n){alert('Entre ton numéro complet');return}document.getElementById('code').innerText='⏳...';document.getElementById('msg').innerText='Connexion en cours...';try{let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='✅ Code généré! Ouvre WhatsApp et entre ce code dans 60s'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=e.message}}</script></body></html>`)
+  res.end(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;box-shadow:0 0 25px #ff000066}h1{color:#ff3333;margin:0}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;font-size:18px;text-align:center;background:#2a2a2a;color:#fff}button{background:linear-gradient(90deg,#ff0000,#990000);color:#fff;border:none;padding:14px 20px;border-radius:10px;font-size:18px;width:95%;cursor:pointer;font-weight:bold}#code{font-size:34px;letter-spacing:6px;margin:20px 0;color:#00ff88;font-weight:bold;min-height:40px}#msg{color:#ccc;margin:10px 0}</style></head><body><div class="card"><h1>🥷 CHOCO-ITACHI-V10</h1><p>Site officiel de connexion</p><p>Entre ton numéro WhatsApp</p><small style="color:#aaa">Ex: 224612345678</small><input id="num" placeholder="224XXXXXXXX"/><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div><p><small>Après: WhatsApp > Paramètres > Appareils liés > Lier avec numéro de téléphone</small></p><p style="margin-top:15px;font-size:12px;color:#666">Propulsé par CHOCO™️ 😈🍫 v10</p></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');if(!n){alert('Entre ton numéro complet');return}document.getElementById('code').innerText='⏳...';document.getElementById('msg').innerText='Connexion en cours...';try{let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='✅ Code généré! Ouvre WhatsApp et entre ce code dans 60s'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=e.message}}</script></body></html>`)
 })
 
-server.listen(process.env.PORT||3000, ()=>console.log("Serveur Pairing ouvert sur "+(process.env.PORT||3000)))
+server.listen(process.env.PORT || 3000, () => console.log("Serveur ouvert sur " + (process.env.PORT || 3000)))
 startBot()
