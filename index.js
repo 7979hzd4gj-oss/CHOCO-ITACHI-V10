@@ -5,20 +5,17 @@ import P from "pino"
 import http from "http"
 import fs from "fs"
 import { URL } from "url"
+import moment from "moment-timezone"
 
 const prefix = config.PREFIX || "."
 let sockGlobal = null
 
 async function startBot() {
   try {
-    console.log("Démarrage bot...")
     try { if (!fs.existsSync("session")) fs.mkdirSync("session") } catch {}
     const { state, saveCreds } = await useMultiFileAuthState("session")
     const sock = makeWASocket({
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
-      },
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" })) },
       logger: P({ level: "silent" }),
       browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"],
       printQRInTerminal: false,
@@ -29,13 +26,12 @@ async function startBot() {
     sock.ev.on("connection.update", (u) => {
       if (u.connection === "close") {
         let reason = u.lastDisconnect?.error?.output?.statusCode
-        if (reason === DisconnectReason.loggedOut) {
-          try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
-        }
+        if (reason === DisconnectReason.loggedOut) { try { fs.rmSync("session", { recursive: true, force: true }) } catch {} }
         if (reason!== DisconnectReason.loggedOut) setTimeout(startBot, 3000)
       }
       if (u.connection === "open") console.log("✅ CHOCO-ITACHI-V10 Connecté!")
     })
+
     sock.ev.on("messages.upsert", async ({ messages }) => {
       try {
         const m = messages[0]
@@ -47,26 +43,20 @@ async function startBot() {
         const command = args.shift().toLowerCase()
 
         if (command === "menu" || command === "allmenu" || command === "help") {
-          let sec = process.uptime()
-          let h = Math.floor(sec / 3600)
-          let mi = Math.floor((sec % 3600) / 60)
-          let up = `${h}h ${mi}m`
-          let menu = `╔═〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
+          const time = moment.tz("Africa/Conakry").format("HH:mm:ss")
+          const date = moment.tz("Africa/Conakry").format("DD/MM/YYYY")
+          const uptime = process.uptime()
+          const h = Math.floor(uptime / 3600)
+          const mi = Math.floor((uptime % 3600) / 60)
+
+          const menuText = `╔═〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
 ║╭─────────────◆
-║│ 🇬🇳*❍ 𝗠𝗘𝗡𝗨 ❍*🇬🇳
+║│ 🇬🇳 ${date} | ${time}
+║│ ⏱️ Uptime: ${h}h ${mi}m
+║│ 👤 Dev: ${config.ownerName || "CHOCO"}
 ║╰─────────────◆
 ╚══════════════════❒
- 👤 𝐂𝐇𝐎𝐂𝐎 𝐈𝐓𝐀𝐂𝐇𝐈
-╔══════════════════🥷
-║ ⿻ *ᴘʀᴇғɪx:* [ ${prefix} ]
-║ ⿻ *ᴏᴡɴᴇʀ:* ${config.ownerName || "CHOCO"}
-║ ⿻ *ᴍᴏᴅᴇ:* public
-║ ⿻ *sᴘᴇᴇᴅ:* rapide ⚡
-║ ⿻ *ᴜᴘᴛɪᴍᴇ:* ${up}
-║ ⿻ *ʀᴀᴍ:* □□□□□ 0%
-║ ⿻ *ᴜsᴀɢᴇ:* v10.0.0
-╚══════════════════🥷
- 🥷 𝗟𝗜𝗦𝗧𝗘 𝗗𝗘𝗦 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗘𝗦
+🥷 𝗟𝗜𝗦𝗧𝗘 𝗗𝗘𝗦 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗘𝗦
 ╔══════════════════🥷
 ║ ❍ 𝗚𝗘𝗡𝗘𝗥𝗔𝗟-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.help → aide du bot
@@ -155,7 +145,6 @@ async function startBot() {
 ║ ⿻.listsudo → lister sudo
 ║ ⿻.delsudo → retirer sudo
 ║ ⿻.pair → code connexion
-║ ⿻.prompt → comportement IA
 ║ ⿻.autoviewstatus → vue statuts
 ║ ⿻.autoreactstatus → reagir
 ║ ⿻.autostatus → statut auto
@@ -165,20 +154,16 @@ async function startBot() {
 ║ ⿻.cleartmp → vider tmp
 ║ ⿻.update → mettre a jour
 ║ ⿻.settings → parametres
-║ ⿻.anticall → bloquer appels
 ║ ⿻.pmblocker → bloquer mp
 ║ ⿻.setpp → photo profil bot
 ║ ⿻.setmenuimage → image menu
-║ ⿻.menustyle → style menu
 ║ ⿻.autobio → bio automatique
-║ ⿻.maintenance → mode mtc
 ╚══════════════════❒
 ╔══════════════════🥷
 ║ ❍ 𝗘𝗗𝗜𝗧𝗜𝗡𝗚-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.sticker → creer sticker
 ║ ⿻.stickersearch → chrch stickers
 ║ ⿻.toimage → sticker image
-║ ⿻.simage → sticker image
 ║ ⿻.take → modifier sticker
 ║ ⿻.waouh → capturer media discret
 ║ ⿻.image → generer image
@@ -188,28 +173,16 @@ async function startBot() {
 ║ ⿻.crop → recadrer image
 ║ ⿻.meme → creer meme
 ║ ⿻.emojimix → mixer emojis
-║ ⿻.igs → story instagram
-║ ⿻.igsc → commentaires IG
 ╚══════════════════❒
 ╔══════════════════🥷
 ║ ❍ 𝗔𝗜 & 𝗚𝗔𝗠𝗘𝗦-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.ai → intelligence IA
 ║ ⿻.gpt → ChatGPT
 ║ ⿻.gemini → IA Gemini
-║ ⿻.claude → Claude AI
-║ ⿻.deepseek → DeepSeek AI
-║ ⿻.lovable → assistant UI/UX
-║ ⿻.copilot → assistant code
-║ ⿻.codeai → generer code IA
 ║ ⿻.imagine → image IA
-║ ⿻.flux → image flux
-║ ⿻.sora → video IA
 ║ ⿻.tictactoe → jeu morpion
-║ ⿻.hangman → jeu pendu
-║ ⿻.trivia → quiz culture
 ║ ⿻.truth → verite
 ║ ⿻.dare → action
-║ ⿻.drague → phrases de drague
 ╚══════════════════❒
 ╔══════════════════🥷
 ║ ❍ 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
@@ -220,46 +193,16 @@ async function startBot() {
 ║ ⿻.instagram → telecharger IG
 ║ ⿻.facebook → telecharger FB
 ║ ⿻.tiktok → telecharger TikTok
-║ ⿻.lyrics → paroles musique
 ╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗧𝗘𝗫𝗧𝗠𝗔𝗞𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.neon → texte neon
-║ ⿻.glitch → texte glitch
-║ ⿻.fire → texte feu
-║ ⿻.ice → texte glace
-║ ⿻.snow → texte neige
-║ ⿻.matrix → texte matrix
-║ ⿻.hacker → style hacker
-║ ⿻.devil → style demon
-║ ⿻.sand → texte sable
-╚══════════════════❒
-╔══════════════════🥷
-║ ❍ 𝗦𝗬𝗦𝗧𝗘𝗠-𝗖𝗛𝗢𝗖𝗢 ❍
-║ ⿻.git → info git
-║ ⿻.github → lien github
-║ ⿻.sc → code source
-║ ⿻.repo → depot bot
-║ ⿻.script → script bot
-║ ⿻.meta → infos Meta/WhatsApp
-║ ⿻.footballnews → actus football
-║ ⿻.itachi-info → histoire Itachi
-╚═══════════════════❒
 🥷══════════════════🥷
-    propulsé par *𝗖𝗛𝗢𝗖𝗢™️* 😈🍫
-🥷══════════════════🥷`;
+  propulsé par CHOCO™️ 😈🍫 V10
+🥷══════════════════🥷`
+
           try {
-            await sock.sendMessage(from, { image: { url: config.BOT_PIC }, caption: menu }, { quoted: m })
+            await sock.sendMessage(from, { image: { url: config.BOT_PIC }, caption: menuText }, { quoted: m })
           } catch {
-            await sock.sendMessage(from, { text: menu }, { quoted: m })
+            await sock.sendMessage(from, { text: menuText }, { quoted: m })
           }
-        }
-        if (command === "ping") {
-          await sock.sendMessage(from, { text: `⚡ Rapide\nPong! CHOCO-ITACHI-V10 actif 🥷` }, { quoted: m })
-        }
-        if (command === "pair" || command === "share" || command === "partage") {
-          let shareText = `🔗 *CHOCO-ITACHI-V10 - PARTAGE*\n📲 Ton site: https://${process.env.RENDER_EXTERNAL_HOSTNAME || "choco-itachi-v10.onrender.com"}\n1. Ouvre ton lien\n2. Mets ton numéro 224...\n3. Clique GENERER\n4. Entre le code dans WhatsApp\n👤 Owner: ${config.ownerName || "CHOCO"}\n🥷 Bot: V10 🇬🇳\n_Propulsé par CHOCO™️_ 😈🍫`;
-          await sock.sendMessage(from, { text: shareText }, { quoted: m })
         }
       } catch (e) { console.log(e) }
     })
@@ -270,47 +213,33 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   if (url.pathname === "/clear") {
     try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
-    sockGlobal = null
-    setTimeout(startBot, 1000)
+    sockGlobal = null; setTimeout(startBot, 1000)
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
     return res.end(JSON.stringify({ ok: true }))
   }
   if (url.pathname === "/pair") {
     const number = url.searchParams.get("number")?.replace(/[^0-9]/g, "")
-    if (!number) {
-      res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ error: "Numero manquant" }))
-    }
+    if (!number) { res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }); return res.end(JSON.stringify({ error: "Numero manquant" })) }
     try {
-      // FIX DEFINITIF Connection Closed
       try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
       try { if (!fs.existsSync("session")) fs.mkdirSync("session") } catch {}
       const { state, saveCreds } = await useMultiFileAuthState("session")
       const sock = makeWASocket({
-        auth: {
-          creds: state.creds,
-          keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
-        },
-        logger: P({ level: "silent" }),
-        browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"],
-        printQRInTerminal: false
+        auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" })) },
+        logger: P({ level: "silent" }), browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"], printQRInTerminal: false
       })
-      sock.ev.on("creds.update", saveCreds)
-      sockGlobal = sock
+      sock.ev.on("creds.update", saveCreds); sockGlobal = sock
       await new Promise(r => setTimeout(r, 2000))
       const code = await sock.requestPairingCode(number)
-      console.log(`CODE pour ${number}: ${code}`)
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       return res.end(JSON.stringify({ code }))
     } catch (e) {
-      console.log("Erreur pairing:", e.message)
       res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       return res.end(JSON.stringify({ error: e.message }))
     }
   }
-  res.writeHead(200, { "Content-Type": "text/html" })
-  res.end(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;box-shadow:0 0 25px #ff000066}h1{color:#ff3333;margin:0}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;font-size:18px;text-align:center;background:#2a2a2a;color:#fff}button{background:linear-gradient(90deg,#ff0000,#990000);color:#fff;border:none;padding:14px 20px;border-radius:10px;font-size:18px;width:95%;cursor:pointer;font-weight:bold}#code{font-size:34px;letter-spacing:6px;margin:20px 0;color:#00ff88;font-weight:bold;min-height:40px}#msg{color:#ccc;margin:10px 0}</style></head><body><div class="card"><h1>🥷 CHOCO-ITACHI-V10</h1><p>Site officiel de connexion</p><p>Entre ton numéro WhatsApp</p><small style="color:#aaa">Ex: 224611257942</small><input id="num" placeholder="224611257942" value="224611257942"/><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div><p><small>Après: WhatsApp > Paramètres > Appareils liés > Lier avec numéro de téléphone</small></p><p style="margin-top:15px;font-size:12px;color:#666">Propulsé par CHOCO™️ 😈🍫 v10</p></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');if(!n){alert('Entre ton numéro complet');return}document.getElementById('code').innerText='⏳...';document.getElementById('msg').innerText='Connexion en cours...';try{let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='✅ Code généré! Ouvre WhatsApp et entre ce code dans 60s'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=e.message}}</script></body></html>`)
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
+  res.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;background:#2a2a2a;color:#fff;text-align:center}button{background:#ff0000;color:#fff;border:none;padding:14px;border-radius:10px;width:95%}#code{font-size:32px;color:#00ff88;margin:20px 0}</style></head><body><div class="card"><h1>🥷 CHOCO-V10</h1><input id="num" value="224611257942"><button onclick="gen()">GENERER</button><div id="code"></div><div id="msg"></div></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');document.getElementById('code').innerText='...';let r=await fetch('/pair?number='+n);let j=await r.json();document.getElementById('code').innerText=j.code||j.error}</script></body></html>`)
 })
-
-server.listen(process.env.PORT || 10000, () => console.log("Serveur ouvert sur " + (process.env.PORT || 10000)))
+server.listen(process.env.PORT || 10000, () => console.log("Serveur ouvert"))
 startBot()
