@@ -277,22 +277,39 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/pair") {
     const number = url.searchParams.get("number")?.replace(/[^0-9]/g, "")
-    if (!number ||!sockGlobal) {
+    if (!number) {
       res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ error: "Bot pas prêt, attends 10s" }))
+      return res.end(JSON.stringify({ error: "Numero manquant" }))
     }
     try {
-      const code = await sockGlobal.requestPairingCode(number)
+      // FIX DEFINITIF Connection Closed
+      try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
+      try { if (!fs.existsSync("session")) fs.mkdirSync("session") } catch {}
+      const { state, saveCreds } = await useMultiFileAuthState("session")
+      const sock = makeWASocket({
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
+        },
+        logger: P({ level: "silent" }),
+        browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"],
+        printQRInTerminal: false
+      })
+      sock.ev.on("creds.update", saveCreds)
+      sockGlobal = sock
+      await new Promise(r => setTimeout(r, 2000))
+      const code = await sock.requestPairingCode(number)
       console.log(`CODE pour ${number}: ${code}`)
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       return res.end(JSON.stringify({ code }))
     } catch (e) {
+      console.log("Erreur pairing:", e.message)
       res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       return res.end(JSON.stringify({ error: e.message }))
     }
   }
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
-  res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;box-shadow:0 0 25px #ff000066}h1{color:#ff3333;margin:0}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;font-size:18px;text-align:center;background:#2a2a2a;color:#fff}button{background:linear-gradient(90deg,#ff0000,#990000);color:#fff;border:none;padding:14px 20px;border-radius:10px;font-size:18px;width:95%;cursor:pointer;font-weight:bold}#code{font-size:34px;letter-spacing:6px;margin:20px 0;color:#00ff88;font-weight:bold;min-height:40px}#msg{color:#ccc;margin:10px 0}</style></head><body><div class="card"><h1>🥷 CHOCO-ITACHI-V10</h1><p>Site officiel de connexion</p><p>Entre ton numéro WhatsApp</p><small style="color:#aaa">Ex: 224611257942</small><input id="num" placeholder="224611257942" value="224611257942"/><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div><p><small>Après: WhatsApp > Paramètres > Appareils liés > Lier avec numéro de téléphone</small></p><p style="margin-top:15px;font-size:12px;color:#666">Propulsé par CHOCO™️ 😈🍫 v10</p></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');if(!n){alert('Entre ton numéro complet');return}document.getElementById('code').innerText='⏳...';document.getElementById('msg').innerText='Connexion en cours...';try{let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='✅ Code généré! Ouvre WhatsApp et entre ce code dans 60s'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=e.message}}</script></body></html>`)
+  res.writeHead(200, { "Content-Type": "text/html" })
+  res.end(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;box-shadow:0 0 25px #ff000066}h1{color:#ff3333;margin:0}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;font-size:18px;text-align:center;background:#2a2a2a;color:#fff}button{background:linear-gradient(90deg,#ff0000,#990000);color:#fff;border:none;padding:14px 20px;border-radius:10px;font-size:18px;width:95%;cursor:pointer;font-weight:bold}#code{font-size:34px;letter-spacing:6px;margin:20px 0;color:#00ff88;font-weight:bold;min-height:40px}#msg{color:#ccc;margin:10px 0}</style></head><body><div class="card"><h1>🥷 CHOCO-ITACHI-V10</h1><p>Site officiel de connexion</p><p>Entre ton numéro WhatsApp</p><small style="color:#aaa">Ex: 224611257942</small><input id="num" placeholder="224611257942" value="224611257942"/><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div><p><small>Après: WhatsApp > Paramètres > Appareils liés > Lier avec numéro de téléphone</small></p><p style="margin-top:15px;font-size:12px;color:#666">Propulsé par CHOCO™️ 😈🍫 v10</p></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');if(!n){alert('Entre ton numéro complet');return}document.getElementById('code').innerText='⏳...';document.getElementById('msg').innerText='Connexion en cours...';try{let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='✅ Code généré! Ouvre WhatsApp et entre ce code dans 60s'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=e.message}}</script></body></html>`)
 })
 
 server.listen(process.env.PORT || 10000, () => console.log("Serveur ouvert sur " + (process.env.PORT || 10000)))
