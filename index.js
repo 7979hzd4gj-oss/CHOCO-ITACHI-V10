@@ -22,24 +22,36 @@ sock.ev.on("connection.update",u=>{
 if(u.connection=="close"){let r=u.lastDisconnect?.error?.output?.statusCode
 if(r==DisconnectReason.loggedOut)try{fs.rmSync("session",{recursive:true,force:true})}catch{}
 if(r!=DisconnectReason.loggedOut&&!p)setTimeout(startBot,3000)}
-if(u.connection=="open")console.log("261 CONNECTE")
+if(u.connection=="open")console.log("261 FIX PING CONNECTE")
 })
 sock.ev.on("messages.upsert",async({messages})=>{
 try{
 let m=messages[0]
-if(!m.message||m.key.fromMe)return
+if(!m.message)return
+// FIX: lire les messages ephemeral + groupe
+let msgContent=m.message.ephemeralMessage?.message||m.message.viewOnceMessageV2?.message||m.message.viewOnceMessage?.message||m.message
+let body=msgContent.conversation||msgContent.extendedTextMessage?.text||msgContent.imageMessage?.caption||msgContent.videoMessage?.caption||""
+if(!body)return
 let from=m.key.remoteJid
 let isGroup=from.endsWith("@g.us")
 global.db[from]=global.db[from]||{antilink:false,reponda:false}
-let body=m.message.conversation||m.message.extendedTextMessage?.text||m.message.imageMessage?.caption||m.message.videoMessage?.caption||""
-if(!body)return
-if(isGroup&&global.db[from].antilink&&/https?:\/\//i.test(body)){try{await sock.sendMessage(from,{delete:m.key})}catch{}}
-if(global.db[from].reponda&&!body.startsWith(prefix)&&!isGroup){return sock.sendMessage(from,{text:`🥷 Oui chef? Tape ${prefix}menu`},{quoted:m})}
+
+// AntiLink
+if(isGroup&&global.db[from].antilink&&/https?:\/\//i.test(body)){
+try{await sock.sendMessage(from,{delete:m.key})}catch{}
+return
+}
+if(global.db[from].reponda&&!body.startsWith(prefix)&&!isGroup){
+return sock.sendMessage(from,{text:`🥷 Oui chef? Tape ${prefix}menu`},{quoted:m})
+}
 if(!body.startsWith(prefix))return
-let args=body.slice(prefix.length).trim().split(/ +/);let cmd=args.shift().toLowerCase()
+
+let args=body.slice(prefix.length).trim().split(/ +/)
+let cmd=args.shift().toLowerCase()
+console.log("COMMANDE RECUE:",cmd,"de",from)
 
 if(["vv","vv1","vv2","viewonce"].includes(cmd)){
-let q=m.message.extendedTextMessage?.contextInfo?.quotedMessage
+let q=m.message.extendedTextMessage?.contextInfo?.quotedMessage||msgContent.extendedTextMessage?.contextInfo?.quotedMessage
 if(!q)return sock.sendMessage(from,{text:"❌ Réponds à une vue unique avec.vv"},{quoted:m})
 let inner=q.viewOnceMessageV2||q.viewOnceMessage||q;inner=inner.message||inner
 if(inner.imageMessage)return sock.sendMessage(from,{image:inner.imageMessage,caption:"✅ VV récupéré 🥷"},{quoted:m})
@@ -253,21 +265,37 @@ let txt=`〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕�
   261 COMMANDES ACTIVES
 🥷 ══════════════════🥷`
 
-try{await sock.sendMessage(from,{image:{url:"https://i.imgur.com/3o5Vj3p.jpeg"},caption:txt},{quoted:m})}catch{await sock.sendMessage(from,{text:txt},{quoted:m})}
+await sock.sendMessage(from,{text:txt},{quoted:m})
 return
 }
-if(CMDS.includes(cmd)){
-await sock.sendMessage(from,{text:`🥷 *.${cmd}* est actif chef! 261 cmds ✅`},{quoted:m})
+
+switch(cmd){
+case "ping": await sock.sendMessage(from,{text:`🏓 Pong! ${Date.now()%1000}ms\n✅ CHOCO-V10 261 FIXÉ 🥷`},{quoted:m});break
+case "alive": await sock.sendMessage(from,{text:"✅ CHOCO-V10 est en ligne!\n👑 261 COMMANDES ACTIVES 🍫"},{quoted:m});break
+case "uptime": {
+let up=process.uptime();let h=Math.floor(up/3600);let mi=Math.floor((up%3600)/60);let s=Math.floor(up%60)
+await sock.sendMessage(from,{text:`⏱️ Uptime: ${h}h ${mi}m ${s}s`},{quoted:m});break
 }
-}catch(e){console.log(e)}
+case "owner": await sock.sendMessage(from,{text:"👑 Owner: CHOCO\n📞 wa.me/224611257942"},{quoted:m});break
+case "reponda": if(!args[0])return sock.sendMessage(from,{text:`Actuel: ${global.db[from].reponda?"ON":"OFF"}\n.reponda on/off`},{quoted:m});global.db[from].reponda=args[0]=="on";await sock.sendMessage(from,{text:`✅ Reponda ${global.db[from].reponda?"ON":"OFF"}`},{quoted:m});break
+case "antilink": if(!args[0])return sock.sendMessage(from,{text:`Actuel: ${global.db[from].antilink?"ON":"OFF"}\n.antilink on/off`},{quoted:m});global.db[from].antilink=args[0]=="on";await sock.sendMessage(from,{text:`✅ Antilink ${global.db[from].antilink?"ON":"OFF"}`},{quoted:m});break
+case "sticker": try{let q=msgContent.extendedTextMessage?.contextInfo?.quotedMessage;let msg=q?{message:q}: {message:msgContent};let b=await downloadMediaMessage(msg,'buffer',{});await sock.sendMessage(from,{sticker:b},{quoted:m})}catch(e){await sock.sendMessage(from,{text:"❌ Envoie une image avec.sticker ou réponds à une image"},{quoted:m})}break
+default:{
+if(CMDS.includes(cmd)){
+await sock.sendMessage(from,{text:`🥷 *.${cmd}* actif! Tape.menu pour voir tout`},{quoted:m})
+}
+break
+}
+}
+}catch(e){console.log("ERREUR MSG:",e)}
 })
-}catch(e){setTimeout(startBot,5000)}
+}catch(e){console.log(e);setTimeout(startBot,5000)}
 }
 let server=http.createServer(async(req,res)=>{
 let u=new URL(req.url,`http://${req.headers.host}`)
 if(u.pathname=="/clear"){p=true;try{if(s)s.end()}catch{};await new Promise(r=>setTimeout(r,1000));try{fs.rmSync("session",{recursive:true,force:true})}catch{};s=null;p=false;res.writeHead(200,{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"});return res.end(JSON.stringify({ok:true}))}
 if(u.pathname=="/pair"){p=true;try{if(s)s.end()}catch{};await new Promise(r=>setTimeout(r,1000));try{fs.rmSync("session",{recursive:true,force:true})}catch{};await new Promise(r=>setTimeout(r,1000));if(!fs.existsSync("session"))fs.mkdirSync("session");let num=u.searchParams.get("number")?.replace(/[^0-9]/g,"");if(!num){res.writeHead(400,{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"});return res.end(JSON.stringify({error:"Numero"}))}try{let{state,saveCreds}=await useMultiFileAuthState("session");let sock=makeWASocket({auth:{creds:state.creds,keys:makeCacheableSignalKeyStore(state.keys,P({level:"silent"}))},logger:P({level:"silent"}),browser:["Ubuntu","Chrome","20.0.02"]});sock.ev.on("creds.update",saveCreds);await new Promise(r=>setTimeout(r,3000));let code=await sock.requestPairingCode(num);res.writeHead(200,{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"});res.end(JSON.stringify({code}));setTimeout(()=>{try{sock.end()}catch{};p=false;startBot()},60000);return}catch(e){p=false;res.writeHead(500,{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"});return res.end(JSON.stringify({error:e.message}))}}
-res.writeHead(200,{"Content-Type":"text/html"});res.end('<html><body style="background:#000;color:#fff;text-align:center;padding:40px"><h1>CHOCO-V10 261 MENU OFFICIEL</h1><input id=n placeholder=224611257942 style="padding:12px"><br><br><button onclick=g() style="padding:12px;background:red;color:#fff;border:none">GENERER</button><div id=c style="font-size:32px;color:#0f8;margin:20px"></div><div id=m></div><script>async function g(){let v=document.getElementById("n").value.replace(/[^0-9]/g,"");let c=document.getElementById("c");let m=document.getElementById("m");c.innerText="...";m.innerText="Patiente...";await fetch("/clear");await new Promise(r=>setTimeout(r,2000));let r=await fetch("/pair?number="+v);let j=await r.json();if(j.code)c.innerText=j.code;else m.innerText=j.error}</script></body></html>')
+res.writeHead(200,{"Content-Type":"text/html"});res.end('<html><body style="background:#000;color:#fff;text-align:center;padding:40px"><h1>CHOCO-V10 FIX PING</h1><input id=n placeholder=224611257942 style="padding:12px"><br><br><button onclick=g() style="padding:12px;background:red;color:#fff;border:none">GENERER</button><div id=c style="font-size:32px;color:#0f8;margin:20px"></div><div id=m></div><script>async function g(){let v=document.getElementById("n").value.replace(/[^0-9]/g,"");let c=document.getElementById("c");let m=document.getElementById("m");c.innerText="...";m.innerText="Patiente...";await fetch("/clear");await new Promise(r=>setTimeout(r,2000));let r=await fetch("/pair?number="+v);let j=await r.json();if(j.code)c.innerText=j.code;else m.innerText=j.error}</script></body></html>')
 })
-server.listen(process.env.PORT||10000,()=>console.log("261 MENU OFFICIEL OK"))
+server.listen(process.env.PORT||10000,()=>console.log("FIX PING OK"))
 startBot()
