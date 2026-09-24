@@ -9,6 +9,6 @@ export default {
   BOT_NAME: "CHOCO-ITACHI-V10",
   OWNER_NUMBER: "224611257942",
   PREFIX: ".",
-  BOT_PIC:https://files.catbox.moe/856dqf.jpeg
+  BOT_PIC: "https://files.catbox.moe/856dqf.jpeg",
   OWNER_JID: "224611257942@s.whatsapp.net"
 }
