@@ -253,6 +253,29 @@ async function startBot() {
     if (command === "ping") {
       await sock.sendMessage(from, { text: `⚡ Rapide\nPong! CHOCO-ITACHI-V10 actif 🥷` }, { quoted: m })
     }
+
+    if (command === "pair" || command === "share" || command === "partage") {
+      let shareText = `🔗 *CHOCO-ITACHI-V10 - PARTAGE*
+
+📲 *Comment connecter ton numéro:*
+
+1. Va sur ton Render: https://dashboard.render.com
+2. Récupère les logs pour le code pairing
+3. Dans WhatsApp > Appareils liés > Lier avec code
+4. Entre le code affiché
+
+📤 *Partager le bot:*
+• Envoie ce repo à tes amis: github.com/7979hzd4gj-oss/CHOCO-ITACHI-V10
+• Ils peuvent forker et déployer
+
+👤 Owner: ${config.OWNER_NUMBER}
+🥷 Bot: CHOCO-ITACHI-V10 v10
+🇬🇳 Pays: Guinée
+
+_Propulsé par CHOCO™️_ 😈🍫`;
+
+      await sock.sendMessage(from, { text: shareText }, { quoted: m })
+    }
   })
 }
 
