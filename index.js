@@ -1,57 +1,48 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys"
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys"
 import config from "./config.js"
 import P from "pino"
 import http from "http"
-import fs from "fs"
-import { URL } from "url"
+http.createServer((req,res)=>res.end("CHOCO-ITACHI-V10 Live 🥷")).listen(process.env.PORT||3000)
 
 const prefix = config.PREFIX || "."
-let sockGlobal = null
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("session")
   const sock = makeWASocket({
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
-    },
+    auth: state,
     logger: P({ level: "silent" }),
-    browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"],
-    printQRInTerminal: false,
-    syncFullHistory: false
+    browser: ["CHOCO-ITACHI-V10", "Chrome", "10.0.0"]
   })
-  sockGlobal = sock
+
   sock.ev.on("creds.update", saveCreds)
 
   sock.ev.on("connection.update", (u) => {
     if (u.connection === "close") {
       let reason = u.lastDisconnect?.error?.output?.statusCode
-      if (reason === DisconnectReason.loggedOut) {
-        try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
-      }
-      setTimeout(startBot, 3000)
+      if (reason!== DisconnectReason.loggedOut) startBot()
     }
     if (u.connection === "open") {
-      console.log("✅ CHOCO Connecté!")
+      console.log("✅ CHOCO-ITACHI-V10 Connecté!")
     }
   })
 
   sock.ev.on("messages.upsert", async ({ messages }) => {
-    try {
-      const m = messages[0]
-      if (!m.message || m.key.fromMe) return
-      const from = m.key.remoteJid
-      const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || ""
-      if (!body.startsWith(prefix)) return
-      const args = body.slice(prefix.length).trim().split(/ +/)
-      const command = args.shift().toLowerCase()
+    const m = messages[0]
+    if (!m.message) return
+    const from = m.key.remoteJid
+    const body = m.message.conversation || m.message.extendedTextMessage?.text || ""
+    if (!body.startsWith(prefix)) return
 
-      if (command === "menu" || command === "allmenu" || command === "help") {
-        let sec = process.uptime()
-        let h = Math.floor(sec / 3600)
-        let mi = Math.floor((sec % 3600) / 60)
-        let up = `${h}h ${mi}m`
-        let menu = `╔═〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
+    const args = body.slice(prefix.length).trim().split(/ +/)
+    const command = args.shift().toLowerCase()
+
+    if (command === "menu" || command === "allmenu" || command === "help") {
+      let sec = process.uptime()
+      let h = Math.floor(sec / 3600)
+      let mi = Math.floor((sec % 3600) / 60)
+      let up = `${h}h ${mi}m`
+
+      let menu = `╔═〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
 ║╭─────────────◆
 ║│ 🇬🇳*❍ 𝗠𝗘𝗡𝗨 ❍*🇬🇳
 ║╰─────────────◆
@@ -59,7 +50,7 @@ async function startBot() {
  👤 𝐂𝐇𝐎𝐂𝐎 𝐈𝐓𝐀𝐂𝐇𝐈
 ╔══════════════════🥷
 ║ ⿻ *ᴘʀᴇғɪx:* [ ${prefix} ]
-║ ⿻ *ᴏᴡɴᴇʀ:* ${config.ownerName || "CHOCO"}
+║ ⿻ *ᴏᴡɴᴇʀ:* ${config.ownerName}
 ║ ⿻ *ᴍᴏᴅᴇ:* public
 ║ ⿻ *sᴘᴇᴇᴅ:* rapide ⚡
 ║ ⿻ *ᴜᴘᴛɪᴍᴇ:* ${up}
@@ -101,6 +92,7 @@ async function startBot() {
 ║ ⿻.restore → restaurer config
 ║ ⿻.clan → gerer un clan
 ╚══════════════════❒
+
 ╔══════════════════🥷
 ║ ❍𝗔𝗗𝗠𝗜𝗡-𝗖𝗛𝗢𝗖𝗢❍
 ║ ⿻.open → ouvrir le groupe
@@ -132,6 +124,7 @@ async function startBot() {
 ║ ⿻.sanction → sanctionner mmb
 ║ ⿻.autorecording → simulation
 ╚══════════════════❒
+
 ╔══════════════════🥷
 ║ ❍ 𝗣𝗥𝗢𝗧𝗘𝗖𝗧𝗜𝗢𝗡-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.antilink → anti-lien
@@ -147,6 +140,7 @@ async function startBot() {
 ║ ⿻.antipurge → anti-purge abusive
 ║ ⿻.antimarabout → anti-arnaques
 ╚══════════════════❒
+
 ╔══════════════════🥷
 ║ ❍ 𝗢𝗪𝗡𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.self → mode solo
@@ -173,6 +167,7 @@ async function startBot() {
 ║ ⿻.autobio → bio automatique
 ║ ⿻.maintenance → mode mtc
 ╚══════════════════❒
+
 ╔══════════════════🥷
 ║ ❍ 𝗘𝗗𝗜𝗧𝗜𝗡𝗚-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.sticker → creer sticker
@@ -191,6 +186,7 @@ async function startBot() {
 ║ ⿻.igs → story instagram
 ║ ⿻.igsc → commentaires IG
 ╚══════════════════❒
+
 ╔══════════════════🥷
 ║ ❍ 𝗔𝗜 & 𝗚𝗔𝗠𝗘𝗦-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.ai → intelligence IA
@@ -211,6 +207,7 @@ async function startBot() {
 ║ ⿻.dare → action
 ║ ⿻.drague → phrases de drague
 ╚══════════════════❒
+
 ╔══════════════════🥷
 ║ ❍ 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.play → jouer musique
@@ -222,6 +219,7 @@ async function startBot() {
 ║ ⿻.tiktok → telecharger TikTok
 ║ ⿻.lyrics → paroles musique
 ╚══════════════════❒
+
 ╔══════════════════🥷
 ║ ❍ 𝗧𝗘𝗫𝗧𝗠𝗔𝗞𝗘𝗥-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.neon → texte neon
@@ -234,6 +232,7 @@ async function startBot() {
 ║ ⿻.devil → style demon
 ║ ⿻.sand → texte sable
 ╚══════════════════❒
+
 ╔══════════════════🥷
 ║ ❍ 𝗦𝗬𝗦𝗧𝗘𝗠-𝗖𝗛𝗢𝗖𝗢 ❍
 ║ ⿻.git → info git
@@ -245,60 +244,41 @@ async function startBot() {
 ║ ⿻.footballnews → actus football
 ║ ⿻.itachi-info → histoire Itachi
 ╚═══════════════════❒
+
 🥷══════════════════🥷
     propulsé par *𝗖𝗛𝗢𝗖𝗢™️* 😈🍫
 🥷══════════════════🥷`;
-        try {
-          await sock.sendMessage(from, { image: { url: config.BOT_PIC }, caption: menu }, { quoted: m })
-        } catch {
-          await sock.sendMessage(from, { text: menu }, { quoted: m })
-        }
-      }
-      if (command === "ping") {
-        await sock.sendMessage(from, { text: `⚡ Rapide\nPong! CHOCO-ITACHI-V10 actif 🥷` }, { quoted: m })
-      }
-      if (command === "pair" || command === "share" || command === "partage") {
-        let shareText = `🔗 *CHOCO-ITACHI-V10*\n\nTon site: https://${process.env.RENDER_EXTERNAL_HOSTNAME || "choco-itachi-v10.onrender.com"}\n\n1. Ouvre le lien\n2. Mets 224611257942\n3. GENERER\n4. WhatsApp > Appareils liés > Lier avec numéro\n\n_Propulsé par CHOCO™️_ 😈🍫`;
-        await sock.sendMessage(from, { text: shareText }, { quoted: m })
-      }
-    } catch (e) { console.log(e) }
+
+      await sock.sendMessage(from, { image: { url: config.BOT_PIC }, caption: menu }, { quoted: m })
+    }
+
+    if (command === "ping") {
+      await sock.sendMessage(from, { text: `⚡ Rapide\nPong! CHOCO-ITACHI-V10 actif 🥷` }, { quoted: m })
+    }
+
+    if (command === "pair" || command === "share" || command === "partage") {
+      let shareText = `🔗 *CHOCO-ITACHI-V10 - PARTAGE*
+
+📲 *Comment connecter ton numéro:*
+
+1. Va sur ton Render: https://dashboard.render.com
+2. Récupère les logs pour le code pairing
+3. Dans WhatsApp > Appareils liés > Lier avec code
+4. Entre le code affiché
+
+📤 *Partager le bot:*
+- Envoie ce repo à tes amis: github.com/7979hzd4gj-oss/CHOCO-ITACHI-V10
+- Ils peuvent forker et déployer
+
+👤 Owner: ${config.OWNER_NUMBER}
+🥷 Bot: CHOCO-ITACHI-V10 v10
+🇬🇳 Pays: Guinée
+
+_Propulsé par CHOCO™️_ 😈🍫`;
+
+      await sock.sendMessage(from, { text: shareText }, { quoted: m })
+    }
   })
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`)
-
-  if (url.pathname === "/clear") {
-    try {
-      fs.rmSync("session", { recursive: true, force: true })
-      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ ok: true }))
-    } catch (e) {
-      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ ok: true }))
-    }
-  }
-
-  if (url.pathname === "/pair") {
-    const number = url.searchParams.get("number")?.replace(/[^0-9]/g, "")
-    if (!number ||!sockGlobal) {
-      res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ error: "Bot pas prêt, attends 10s" }))
-    }
-    if (sockGlobal.authState?.creds?.registered) {
-      res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ error: "Déjà connecté! Clique RESET SESSION" }))
-    }
-    try {
-      await new Promise(r => setTimeout(r, 1200))
-      const code = await sockGlobal.requestPairingCode(number)
-      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ code }))
-    } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
-      return res.end(JSON.stringify({ error: e.message + " | Clique RESET SESSION et réessaye" }))
-    }
-  }
-
-  res.writeHead(200, { "Content-Type": "text/html" })
-  res.end(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;box-shadow:0 0 25px #ff000066}h1{color:#ff3333;margin:0}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;font-size:18px;text-align:center;background:#2a2a2a;color:#fff}button{background:linear-gradient(90deg,#ff0000,#990000);color:#fff;border:none;padding:14px 20px;border-radius:10px;font-size:18px;width:95%;cursor:pointer;font-weight:bold;margin:5px 0}.reset{background:#333!important;font-size:13px!important}#code{font-size:34px;letter-spacing:6px;margin:20px 0;color:#00ff88;font-weight:bold;min-height:40px}#msg{color:#ccc;margin:10px 0;font-size:13px}</style></head><body><div class="card"><h1>🥷 CHOCO-ITACHI-V10</h1><p>Connexion officielle</p><small style="color:#aaa">224611257942</small><input id="num" value="224611257942" placeholder="224XXXXXXXX"/><button onclick="gen()">GENERER LE CODE</button><button class="reset" onclick="clearS()">🗑️ RESET SESSION (si erreur)</button><div id="code"></div><div id="msg"></div><p><small>WhatsApp > Appareils liés > Lier avec numéro</small></p><p style="margin-top:15px;font-size:11px;color:#666">CHOCO™️ v10.1 Fix</p></div><script>async function clearS(){document.getElementById('msg').innerText='Effacement...';try{await fetch('/clear');document.getElementById('msg').innerText='✅ Session effacée! Attends 4s puis GENERER';document.getElement
+startBot()
