@@ -1,10 +1,15 @@
-const { default: makeWASocket, useMultiFileAuthState, downloadMediaMessage, DisconnectReason } = require('@whiskeysockets/baileys')
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 10000;
+app.get('/', (req, res) => res.send('CHOCO ITACHI V10 ONLINE 🔥'));
+app.listen(PORT, () => console.log('Server running on ' + PORT));
+
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys')
 const pino = require('pino')
 const fs = require('fs')
 const axios = require('axios')
 const yts = require('yt-search')
 const ytdl = require('@distube/ytdl-core')
-
 let gdb = {
 warnings:{}, banned:[], mode:"public", prefix:".",
 antilink:false, antibadword:false, antibot:false, antileave:false, antimention:false, antisticker:false, antitag:false, anticall:false, antidelete:false, antipurge:false, antimarabou:false, antistatut:false, antifake:false, antispam:false, antiviewonce:false, antigroup:false, antivoice:false, antifile:false, antishare:false, antiflood:false, antiedit:false, antichannel:false,
