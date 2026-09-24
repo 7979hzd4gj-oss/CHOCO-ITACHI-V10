@@ -1,15 +1,15 @@
 {
   "name": "choco-itachi-v10",
+  "version": "10.0.0",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.8",
-    "pino": "^8.19.0",
+    "@whiskeysockets/baileys": "^6.7.18",
     "express": "^4.19.2",
-    "moment-timezone": "^0.5.45",
+    "pino": "^9.6.0",
     "qrcode-terminal": "^0.12.0"
   }
 }
