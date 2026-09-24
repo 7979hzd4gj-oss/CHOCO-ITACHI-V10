@@ -1,7 +1,7 @@
 {
   "name": "choco-itachi-v10",
   "version": "10.0.0",
-  "description": "WhatsApp Bot CHOCO-ITACHI V10 - Owner 224611257942",
+  "description": "WhatsApp Bot CHOCO-ITACHI-V10",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
@@ -17,6 +17,7 @@
     "moment-timezone": "^0.5.45",
     "file-type": "^18.5.0",
     "fs-extra": "^11.2.0",
-    "wa-sticker-formatter": "^4.4.4"
+    "wa-sticker-formatter": "^4.4.4",
+    "express": "^4.18.2"
   }
 }
