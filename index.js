@@ -83,7 +83,6 @@ async function startBot() {
           const uptime = process.uptime()
           const h = Math.floor(uptime / 3600)
           const mi = Math.floor((uptime % 3600) / 60)
-
           const menuText = `╔═〔 🥷𝗖𝗛𝗢𝗖𝗢-𝗜𝗧𝗔𝗖𝗛𝗜-𝗩𝟭𝟬 〕═❒
 ║╭─────────────◆
 ║│ 🇬🇳 ${date} | ${time}
@@ -300,19 +299,19 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   if (url.pathname === "/clear") {
     isPairing = true
-    try { if(sockGlobal) { sockGlobal.ev.removeAllListeners(); try{ sockGlobal.end() } catch{} } } catch{}
-    await new Promise(r => setTimeout(r, 1000))
+    try { if(sockGlobal) { sockGlobal.ev.removeAllListeners(); try{ sockGlobal.end(undefined) } catch{} } } catch{}
+    await new Promise(r => setTimeout(r, 1500))
     try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
-    sockGlobal = null; isPairing = false; setTimeout(startBot, 1500)
+    sockGlobal = null; isPairing = false
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
     return res.end(JSON.stringify({ ok: true }))
   }
   if (url.pathname === "/pair") {
     isPairing = true
-    try { if(sockGlobal) { try{ sockGlobal.ev.removeAllListeners(); sockGlobal.end() } catch{} } } catch{}
-    await new Promise(r => setTimeout(r, 1500))
+    try { if(sockGlobal) { try{ sockGlobal.ev.removeAllListeners(); sockGlobal.end(undefined) } catch{} } } catch{}
+    await new Promise(r => setTimeout(r, 2000))
     try { fs.rmSync("session", { recursive: true, force: true }) } catch {}
-    await new Promise(r => setTimeout(r, 1000))
+    await new Promise(r => setTimeout(r, 1500))
     if (!fs.existsSync("session")) fs.mkdirSync("session")
     const number = url.searchParams.get("number")?.replace(/[^0-9]/g, "")
     if (!number) { res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }); return res.end(JSON.stringify({ error: "Numero manquant" })) }
@@ -323,11 +322,11 @@ const server = http.createServer(async (req, res) => {
         logger: P({ level: "silent" }), browser: ["Ubuntu", "Chrome", "20.0.02"], printQRInTerminal: false
       })
       sock.ev.on("creds.update", saveCreds)
-      await new Promise(r => setTimeout(r, 3000))
+      await new Promise(r => setTimeout(r, 3500))
       const code = await sock.requestPairingCode(number)
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" })
       res.end(JSON.stringify({ code }))
-      setTimeout(() => { try{ sock.end() } catch{}; isPairing = false; startBot() }, 60000)
+      setTimeout(() => { try{ sock.end(undefined) } catch{}; isPairing = false; startBot() }, 70000)
       return
     } catch (e) {
       isPairing = false
@@ -336,7 +335,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
-  res.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><title>CHOCO PAIR</title><style>body{background:#0f0f0f;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#1a1a1a;padding:30px;border-radius:20px;width:90%;max-width:380px;text-align:center;border:1px solid #222}input{width:90%;padding:14px;border-radius:10px;border:none;margin:15px 0;background:#2a2a2a;color:#fff;text-align:center}button{background:#ff0000;color:#fff;border:none;padding:14px;border-radius:10px;width:95%;font-weight:bold;cursor:pointer}#code{font-size:32px;color:#00ff88;margin:20px 0;font-weight:bold;letter-spacing:3px}#msg{color:#ffaa00;font-size:13px;margin-top:10px}</style></head><body><div class="card"><h1>🥷 CHOCO-V10</h1><p>Site officiel de connexion</p><input id="num" value="224611257942"><button onclick="gen()">GENERER LE CODE</button><div id="code"></div><div id="msg"></div></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');document.getElementById('code').innerText='...';document.getElementById('msg').innerText='Patiente 5 sec...';try{let clr=await fetch('/clear');await new Promise(r=>setTimeout(r,2000));let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){document.getElementById('code').innerText=j.code;document.getElementById('msg').innerText='Code genere! Colle VITE (<10sec) dans WhatsApp!'}else{document.getElementById('code').innerText='Erreur';document.getElementById('msg').innerText=j.error}}catch(e){document.getElementById('msg').innerText=e.message}}</script></body></html>`)
+  res.end(`<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO-V10 PAIR</title><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}.card{background:#111;padding:30px;border-radius:20px;width:92%;max-width:400px;text-align:center;border:1px solid #222;box-shadow:0 0 30px #ff000011}h1{color:#fff;margin:0}span{color:#ff0000}.sub{color:#888;font-size:13px;margin:10px 0 20px}input{width:90%;padding:16px;border-radius:12px;border:1px solid #333;margin:15px 0;background:#1a1a1a;color:#fff;text-align:center;font-size:16px}button{background:#ff0000;color:#fff;border:none;padding:16px;border-radius:12px;width:95%;font-weight:bold;cursor:pointer;font-size:16px}button:active{transform:scale(0.98)}#code{font-size:36px;color:#00ff88;margin:25px 0;font-weight:bold;letter-spacing:4px;min-height:40px}#msg{font-size:13px;margin-top:10px;min-height:20px}.green{color:#00ff88}.yellow{color:#ffaa00}.red{color:#ff4444}.steps{text-align:left;background:#1a1a1a;padding:15px;border-radius:12px;margin-top:20px;font-size:12px;color:#aaa;line-height:1.6}</style></head><body><div class="card"><h1>🥷 <span>CHOCO-V10</span></h1><p class="sub">Site officiel de connexion - Bot Public<br>Propulsé par CHOCO™️</p><input id="num" placeholder="Entre ton numéro ex: 224611257942" type="number"><button onclick="gen()" id="btn">GENERER LE CODE</button><div id="code"></div><div id="msg"></div><div class="steps"><b>Comment connecter:</b><br>1. Entre ton numéro avec indicatif (224...)<br>2. Clique GENERER<br>3. WhatsApp > Réglages > Appareils liés > Lier un appareil<br>4. En bas "Se connecter avec numéro"<br>5. Colle le code en 10 sec!</div></div><script>async function gen(){let n=document.getElementById('num').value.replace(/[^0-9]/g,'');let c=document.getElementById('code');let m=document.getElementById('msg');let b=document.getElementById('btn');if(!n || n.length<10){m.className='red';m.innerText='❌ Numéro invalide! Ex: 224611257942';return}b.innerText='⏳ GENERATION...';b.disabled=true;c.innerText='...';m.className='yellow';m.innerText='Patiente 5 secondes... Nettoyage session...';try{await fetch('/clear');await new Promise(r=>setTimeout(r,3000));let r=await fetch('/pair?number='+n);let j=await r.json();if(j.code){c.innerText=j.code;m.className='green';m.innerText='✅ Code généré! Colle VITE dans WhatsApp (<20sec)!';b.innerText='CODE GENERÉ ✅'}else{c.innerText='Erreur';m.className='red';m.innerText='❌ '+j.error;b.innerText='REESSAYER';b.disabled=false}}catch(e){m.className='red';m.innerText='❌ Erreur: '+e.message;b.innerText='REESSAYER';b.disabled=false}}</script></body></html>`)
 })
 server.listen(process.env.PORT || 10000, () => console.log("Serveur ouvert"))
 startBot()
