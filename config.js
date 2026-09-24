@@ -1,8 +1,8 @@
 export default {
-  botName: "CHOCO-LEGENDE-V10",
+  botName: "CHOCO-ITACHI-V10",
   ownerName: "CHOCO",
   ownerNumber: "224611257942",
   prefix: ".",
   country: "🇬🇳",
-  version: "1.0.0"
+  version: "10.0.0"
 };
