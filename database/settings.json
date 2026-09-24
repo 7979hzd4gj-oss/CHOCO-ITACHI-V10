@@ -1,9 +1,0 @@
-{
-  "prefix": ".",
-  "welcome": true,
-  "goodbye": true,
-  "antilink": false,
-  "antibadword": false,
-  "antiviewonce": false,
-  "antidelete": false
-}
