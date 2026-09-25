@@ -1,4 +1,4 @@
-const express=require('express');const app=express();const PORT=process.env.PORT||10000;const QRCode=require('qrcode');
+mconst express=require('express');const app=express();const PORT=process.env.PORT||10000;const QRCode=require('qrcode');
 app.use(express.json());app.use(express.urlencoded({extended:true}));global.lastQR=null;global.sock=null;
 
 app.get('/',(req,res)=>{
@@ -257,4 +257,55 @@ case "delete":case "del": {if(qmsg){await sock.sendMessage(from,{delete:{remoteJ
 case "clear": await send("Clear local ✅"); break;
 case "tagall": {let meta=await sock.groupMetadata(from); let mems=meta.participants.map(p=>p.id); await sock.sendMessage(from,{text:(q||"TAGALL 📢")+"\n"+mems.map((_,i)=>`@${mems[i].split('@')[0]}`).join(" "),mentions:mems},{quoted:m}); break;}
 case "tag":case "hidetag": {let meta=await sock.groupMetadata(from); await sock.sendMessage(from,{text:q||"Hi",mentions:meta.participants.map(p=>p.id)},{quoted:m}); break;}
-case "link":case "
+case "link":case "grouplink": {let c=await sock.groupInviteCode(from); await send(`https://chat.whatsapp.com/${c}`); break;}
+case "revoke": {await sock.groupRevokeInvite(from); let c=await sock.groupInviteCode(from); await send(`Nouveau lien: https://chat.whatsapp.com/${c}`); break;}
+case "setgname": if(q){await sock.groupUpdateSubject(from,q); await send("Nom change ✅")} break;
+case "setgpp": {try{let med=qmsg?{message:qmsg}:m; let b=await downloadMediaMessage(med,'buffer',{},{}); await sock.updateProfilePicture(from,b); await send("PP change ✅")}catch{await send("Reponds a une image avec.setgpp")} break;}
+case "getgpp":case "getpic": {try{let pp=await sock.profilePictureUrl(from,'image'); await sock.sendMessage(from,{image:{url:pp}},{quoted:m})}catch{await send("Pas de PP")} break;}
+case "setdesc": if(q){await sock.groupUpdateDescription(from,q); await send("Desc change ✅")} break;
+case "getdesc": {let meta=await sock.groupMetadata(from); await send(meta.desc||"Pas de desc")} break;
+case "admins": {let meta=await sock.groupMetadata(from); let ads=meta.participants.filter(p=>p.admin).map(p=>`@${p.id.split('@')[0]}`).join("\n"); await sock.sendMessage(from,{text:"ADMINS:\n"+ads,mentions:meta.participants.filter(p=>p.admin).map(p=>p.id)},{quoted:m}); break;}
+case "members": {let meta=await sock.groupMetadata(from); await send(`${meta.participants.length} membres`)} break;
+case "warnings": {let u=mention[0]||sender; await send(`Warns ${u.split('@')[0]}: ${db.warnings[u]||0}/${config.WARN_LIMIT}`)} break;
+case "warn": {let u=mention[0]; if(u){db.warnings[u]=(db.warnings[u]||0)+1; save(); await send(`WARN ${db.warnings[u]}/${config.WARN_LIMIT}`); if(db.warnings[u]>=config.WARN_LIMIT){await sock.groupParticipantsUpdate(from,[u],"remove"); db.warnings[u]=0; save();}} break;}
+case "resetwarn": {let u=mention[0]||sender; db.warnings[u]=0; save(); await send("RESET ✅")} break;
+case "poll": await sock.sendMessage(from,{poll:{name:q||"Sondage",values:["Oui","Non"],selectableCount:1}},{quoted:m}); break;
+
+// DOWNLOAD
+case "play":case "song":case "ytmp3": {
+if(!q) return await send("Ex:.play die hard"); try{let s=await yts(q); let v=s.videos[0]; if(!v) return await send("Pas trouve"); let st=ytdl(v.url,{filter:'audioonly',quality:'highestaudio'}); let ch=[]; for await(let c of st) ch.push(c); await sock.sendMessage(from,{audio:Buffer.concat(ch),mimetype:'audio/mpeg',ptt:false},{quoted:m});}catch(e){await send("Erreur: "+e.message)} break;}
+case "video":case "ytmp4": {
+if(!q) return await send("Ex:.video die hard"); try{let s=await yts(q); let v=s.videos[0]; let st=ytdl(v.url,{filter:'audioandvideo',quality:'lowestvideo'}); let ch=[]; for await(let c of st) ch.push(c); if(Buffer.concat(ch).length>45*1024*1024) return await send(">45MB utilise ytmp3"); await sock.sendMessage(from,{video:Buffer.concat(ch),caption:v.title},{quoted:m});}catch(e){await send("Erreur: "+e.message)} break;}
+case "yts": {let s=await yts(q); await send(s.videos.slice(0,5).map(v=>`${v.title}\n${v.url}`).join("\n\n")); break;}
+case "tiktok":case "insta":case "fb":case "mediafire":case "apk":case "spotify": await send(`${cmd.toUpperCase()} DL recu: ${q}`); break;
+
+// FUN
+case "sticker":case "s": {try{let med=qmsg?{message:qmsg}:m; let b=await downloadMediaMessage(med,'buffer',{},{}); await sock.sendMessage(from,{sticker:b},{quoted:m});}catch{await send("Envoie image +.s")} break;}
+case "toimg":case "toimage": {try{let med={message:qmsg}; let b=await downloadMediaMessage(med,'buffer',{},{}); await sock.sendMessage(from,{image:b},{quoted:m});}catch{await send("Reponds a un sticker")} break;}
+case "emojimix": await sock.sendMessage(from,{sticker:{url:`https://tenor.googleapis.com/v2/featured?key=AIzaSyAyimkuYQgF_FX1RWDK0Rlyy2vqQ_TORg&contentfilter=high&media_filter=minimal&component=proactive&collection=emoji_kitchen_v6&q=${encodeURIComponent(q||"😂❤️")}` }},{quoted:m}).catch(()=>send("Ex:.emojimix 😂+❤️")); break;
+case "qc": await sock.sendMessage(from,{sticker:{url:`https://api.heckerman06.repl.co/api/quotly?text=${encodeURIComponent(q||"Choco V10")}` }},{quoted:m}).catch(()=>send("QC error")); break;
+case "ai":case "gpt": {let r=await axios.get(`https://api.heckerman06.repl.co/api/ai?prompt=${encodeURIComponent(q||"Hi")}`).catch(()=>null); await send(r?.data?.response||r?.data?.result||"AI: "+q); break;}
+case "imagine": {await sock.sendMessage(from,{image:{url:`https://image.pollinations.ai/prompt/${encodeURIComponent(q||"anime")}`},caption:q},{quoted:m}); break;}
+case "google": await send(`https://www.google.com/search?q=${encodeURIComponent(q)}`); break;
+case "wiki": {let r=await axios.get(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q)}`).catch(()=>null); await send(r?.data?.extract||"Wiki pas trouve"); break;}
+case "meme": {let r=await axios.get('https://meme-api.com/gimme').catch(()=>null); if(r?.data?.url) await sock.sendMessage(from,{image:{url:r.data.url}},{quoted:m}); break;}
+case "ship": {let a=mention[0]||sender; let b=mention[1]||from; let p=Math.floor(Math.random()*100); await send(`💘 SHIP ${a.split('@')[0]} + ${b.split('@')[0]} = ${p}%`)} break;
+case "dare": await send(["Mange piment","Danse","Voice honteux"][Math.floor(Math.random()*3)]); break;
+case "truth": await send(["Tu as vole?","Ton crush?","Tu mens?"][Math.floor(Math.random()*3)]); break;
+case "roll": await send(`🎲 ${Math.floor(Math.random()*6)+1}`); break;
+case "flip": await send(["Pile","Face"][Math.floor(Math.random()*2)]); break;
+case "flirt": await send("Tu es comme WiFi ❤️"); break;
+
+// OWNER
+case "eval": if(sender.includes(config.OWNER_NUMBER) || m.key.fromMe){try{let ev=await eval(q); await send(`${ev}`)}catch(e){await send(`${e}`)}} break;
+case "restart": if(sender.includes(config.OWNER_NUMBER) || m.key.fromMe){await send("Restart..."); process.exit(1)} break;
+case "broadcast":case "bc": {if(!sender.includes(config.OWNER_NUMBER)) return; let groups=Object.keys(await sock.groupFetchAllParticipating()).slice(0,20); for(let g of groups){await sock.sendMessage(g,{text:`BROADCAST: ${q}`}).catch(()=>{});} await send(`BC ${groups.length} groupes`); break;}
+case "join": {if(q.includes("chat.whatsapp.com")){await sock.groupAcceptInvite(q.split("/").pop()); await send("JOIN ✅")} break;}
+case "leave": if(isGroup){await sock.groupLeave(from)} break;
+
+default: await send(`❌ "${cmd}" pas reconnue\nTape.menu`); break;
+}
+}catch(e){console.log("ERREUR:",e.message); await sock.sendMessage(from,{text:"Erreur "+cmd+": "+e.message},{quoted:m}).catch(()=>{});}
+});
+}
+start();
