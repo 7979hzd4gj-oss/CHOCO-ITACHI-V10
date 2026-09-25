@@ -1,7 +1,7 @@
 const express=require('express');const app=express();const PORT=process.env.PORT||10000;const QRCode=require('qrcode');
-app.use(express.json());app.use(express.urlencoded({extended:true}));global.lastQR=null;
+app.use(express.json());app.use(express.urlencoded({extended:true}));global.lastQR=null;global.sock=null;
 app.get('/',(req,res)=>{res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO V10</title><style>body{background:#000;color:#fff;display:flex;justify-content:center;padding-top:30px;font-family:Arial}.box{width:100%;max-width:360px;padding:0 22px;text-align:center}h1{color:#00ff00;font-size:26px;font-weight:900}#qr{background:#fff;border-radius:18px;padding:14px;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}#qr img{width:100%}input{width:100%;padding:16px;border-radius:12px;border:none;margin-top:20px}button{width:100%;margin-top:18px;padding:17px;background:#00ff00;border:none;border-radius:12px;font-weight:900}</style></head><body><div class="box"><h1>🤖 CHOCO ITACHI V10</h1><h3>261 FINAL DROIT</h3><div id="qr">${global.lastQR?`<img src="${global.lastQR}">`:'Generation...'}</div><form action="/pair" method="post"><input name="number" placeholder="224xxxxxxxxxxx" required><button>GET CODE</button></form></div><script>setTimeout(()=>location.reload(),20000)</script></body></html>`);});
-app.post('/pair',async(req,res)=>{let n=req.body.number.replace(/[^0-9]/g,'');try{let c=await global.sock.requestPairingCode(n);res.send(`<h1 style="background:#000;color:#0f0;height:100vh;text-align:center;padding-top:100px">CODE: ${c}<br><a href="/">Retour</a></h1>`);}catch(e){res.send(e.message+' <a href="/">Retour</a>');}});
+app.post('/pair',async(req,res)=>{let n=req.body.number.replace(/[^0-9]/g,'');if(!global.sock)return res.send('Bot pas pret <a href="/">Retour</a>');try{let c=await global.sock.requestPairingCode(n);c=c?.match(/.{1,4}/g)?.join("-")||c;res.send(`<h1 style="background:#000;color:#0f0;height:100vh;text-align:center;padding-top:100px">CODE: ${c}<br><a href="/">Retour</a></h1>`);}catch(e){res.send(e.message+' <a href="/">Retour</a>');}});
 app.listen(PORT,()=>console.log('ON '+PORT));
 const fs=require('fs'),pino=require('pino'),axios=require('axios'),yts=require('yt-search'),ytdl=require('@distube/ytdl-core'),config=require('./config.js');
 const {default:makeWASocket,useMultiFileAuthState,DisconnectReason,downloadMediaMessage,makeCacheableSignalKeyStore}=require('@whiskeysockets/baileys');
@@ -11,7 +11,7 @@ const saveDB=()=>fs.writeFileSync('./database.json',JSON.stringify(gdb,null,2));
 const badW=["pute","connard","fdp","fuck","shit"];
 async function startChoco(){
 const {state,saveCreds}=await useMultiFileAuthState(config.SESSION_FOLDER);
-const sock=makeWASocket({auth:state,logger:pino({level:'silent'}),printQRInTerminal:false,browser:["CHOCO V10","Chrome","1.0"]});
+const sock=makeWASocket({auth:{creds:state.creds,keys:makeCacheableSignalKeyStore(state.keys,pino({level:'silent'}))},logger:pino({level:'silent'}),printQRInTerminal:false,browser:["Chrome","Chrome","1.0"]});
 global.sock=sock;sock.ev.on('creds.update',saveCreds);
 sock.ev.on('connection.update',async(u)=>{if(u.qr)QRCode.toDataURL(u.qr,(e,url)=>{if(!e)global.lastQR=url;});if(u.connection=="open")global.lastQR=null;if(u.connection=="close"&&u.lastDisconnect?.error?.output?.statusCode!=DisconnectReason.loggedOut)startChoco();});
 sock.ev.on('messages.upsert',async({messages})=>{
