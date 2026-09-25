@@ -4,7 +4,7 @@ app.get('/',(req,res)=>{res.send(`<html><head><meta name="viewport" content="wid
 app.post('/pair',async(req,res)=>{let n=req.body.number.replace(/[^0-9]/g,'');try{let c=await global.sock.requestPairingCode(n);res.send(`<h1 style="background:#000;color:#0f0;height:100vh;text-align:center;padding-top:100px">CODE: ${c}<br><a href="/">Retour</a></h1>`);}catch(e){res.send(e.message+' <a href="/">Retour</a>');}});
 app.listen(PORT,()=>console.log('ON '+PORT));
 const fs=require('fs'),pino=require('pino'),axios=require('axios'),yts=require('yt-search'),ytdl=require('@distube/ytdl-core'),config=require('./config.js');
-const {default:makeWASocket,useMultiFileAuthState,DisconnectReason,downloadMediaMessage}=require('@whiskeysockets/baileys');
+const {default:makeWASocket,useMultiFileAuthState,DisconnectReason,downloadMediaMessage,makeCacheableSignalKeyStore}=require('@whiskeysockets/baileys');
 let gdb={warnings:{},antilink:config.ANTILINK,antibadword:false,antibot:false,antisticker:false,antifile:false,antivoice:false,welcome:config.WELCOME,goodbye:config.GOODBYE,antileave:false,antimention:false,antitag:false,anticall:false,antidelete:false,antipurge:false,antimarabou:false,antistatut:false,antifake:false,antispam:false,antiviewonce:false,antigroup:false,antishare:false,antiflood:false,antiedit:false,antichannel:false};
 if(fs.existsSync('./database.json')){try{gdb=JSON.parse(fs.readFileSync('./database.json'));}catch{}}
 const saveDB=()=>fs.writeFileSync('./database.json',JSON.stringify(gdb,null,2));
