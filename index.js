@@ -35,7 +35,7 @@ app.listen(PORT, ()=> console.log('Server on ' + PORT));
 
 const fs = require('fs');
 const pino = require('pino');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const axios = require('axios');
 const yts = require('yt-search');
 const ytdl = require('@distube/ytdl-core');
