@@ -3,7 +3,6 @@
   "version": "10.0.0",
   "description": "WhatsApp Bot CHOCO-ITACHI-V10",
   "main": "index.js",
-  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
