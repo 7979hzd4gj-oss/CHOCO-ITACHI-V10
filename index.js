@@ -5,27 +5,28 @@ const QRCode = require('qrcode');
 
 app.get('/', (req, res) => {
   res.send(`
-  <html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>CHOCO V10</title>
+  <html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><title>CHOCO V10</title>
   <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;500&display=swap');
-  body{background:#000;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Inter',Arial;margin:0;padding:20px;box-sizing:border-box}
-  .box{text-align:center;width:100%;max-width:380px}
-  h1{color:#00ff66;font-size:32px;margin:0;font-weight:800;letter-spacing:0.5px;text-shadow:0 0 15px #00ff66}
-  h3{margin:18px 0 28px 0;font-size:18px;letter-spacing:1px}
-  #qr{background:#fff;padding:14px;border-radius:22px;margin:0 auto;width:92%;aspect-ratio:1/1;display:flex;justify-content:center;align-items:center;box-shadow:0 0 20px rgba(255,255,255,0.15)}
-  #qr img{width:100%;height:100%;border-radius:12px}
-  .scan-text{margin:20px 0 28px 0;font-size:15px;line-height:1.4;opacity:0.9}
-  input{padding:18px 20px;width:100%;border-radius:14px;border:none;margin:0;box-sizing:border-box;font-size:15px;outline:none;background:#f2f2f2}
-  button{padding:18px;background:#00ff66;color:#000;border:none;border-radius:14px;width:100%;font-weight:800;font-size:18px;margin-top:22px;cursor:pointer;box-shadow:0 0 20px rgba(0,255,102,0.4)}
-  .status{margin-top:22px;font-size:16px;letter-spacing:0.5px}
-  .divider{height:1px;background:linear-gradient(90deg, transparent, #fff, transparent);margin:25px 0;opacity:0.5}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#000000;color:#fff;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;padding-top:40px}
+  .box{width:100%;max-width:360px;padding:0 22px;text-align:center}
+  h1{color:#00ff00;font-size:28px;font-weight:900;letter-spacing:0.3px;display:flex;align-items:center;justify-content:center;gap:8px}
+  h3{margin:14px 0 26px 0;font-size:16px;font-weight:700;letter-spacing:0.5px}
+  #qr{background:#fff;border-radius:18px;padding:12px;width:100%;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;margin:0 auto}
+  #qr img{width:100%;height:100%;border-radius:6px}
+  .scan{margin:18px 0 0 0;font-size:14px;line-height:1.5;color:#e6e6e6}
+  .line{height:1px;background:#6b6b6b;margin:22px 0 22px 0;opacity:0.6}
+  input{width:100%;padding:16px 16px;border-radius:12px;border:2px solid #ddd;background:#fff;color:#333;font-size:14px;outline:none}
+  input::placeholder{color:#aaa}
+  button{width:100%;margin-top:22px;padding:17px;background:#00ff00;color:#000;border:none;border-radius:12px;font-weight:900;font-size:17px;letter-spacing:0.3px}
+  .status{margin-top:20px;font-size:15px;color:#fff}
   </style></head><body><div class="box">
   <h1>🤖 CHOCO ITACHI V10</h1>
   <h3>261 CMDS ALIGNÉ</h3>
-  <div id="qr">${global.lastQR ? `<img src="${global.lastQR}">` : '<span style="color:#000;font-weight:600">Génération QR...<br>recharge dans 20s</span>'}</div>
-  <p class="scan-text">Scanne avec WhatsApp iPhone<br>Appareils liés > Lier un appareil</p>
-  <div class="divider"></div>
-  <form action="/pair" method="post"><input name="number" placeholder="224xxxxxxxxx" required><button>GET CODE</button></form>
+  <div id="qr">${global.lastQR ? `<img src="${global.lastQR}">` : '<div style="color:#000;font-weight:700;font-size:14px">Génération QR...</div>'}</div>
+  <div class="scan">Scanne avec WhatsApp iPhone<br>Appareils liés > Lier un appareil</div>
+  <div class="line"></div>
+  <form action="/pair" method="post"><input name="number" placeholder="224xxxxxxxxxxx" required><button>GET CODE</button></form>
   <div class="status">Statut: ⏳ EN ATTENTE</div>
   </div><script>setTimeout(()=>location.reload(),20000)</script></body></html>
   `);
