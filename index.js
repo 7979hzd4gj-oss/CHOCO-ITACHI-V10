@@ -87,10 +87,12 @@ async function startChoco(){
     },3000);
   }
 
-sock.ev.on('connection.update', (u)=>{
-  if(u.connection=="open") console.log("✅ CONNECTÉ")
-  if(u.connection=="close" && u.lastDisconnect?.error?.output?.statusCode!=DisconnectReason.loggedOut) startChoco()
-})
+sock.ev.on('connection.update', async (u)=>{
+  const { connection, lastDisconnect, qr } = u;
+  if(qr){ QRCode.toDataURL(qr, (err, url) => { if(!err) global.lastQR = url; }); }
+  if(connection=="open"){ console.log("✅ CONNECTÉ"); global.lastQR=null; }
+  if(connection=="close" && lastDisconnect?.error?.output?.statusCode!=DisconnectReason.loggedOut) startChoco();
+});
 
 sock.ev.on('messages.upsert', async ({messages})=>{
 const m = messages[0]
