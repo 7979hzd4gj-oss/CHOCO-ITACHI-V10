@@ -71,9 +71,9 @@ async function startChoco(){
       try{
         let code = await sock.requestPairingCode(PAIR_NUMBER);
         console.log(`\n┏━━━━━━━━━━━━━━━━┓\n┃ CODE: ${code} ┃\n┗━━━━━━━━━━━━━━━━┛\n`);
-      }catch(e){ console.log(e.message
-  },3000)
-}
+      }catch(e){ console.log(e.message); }
+    },3000);
+  }
 
 sock.ev.on('connection.update', (u)=>{
   if(u.connection=="open") console.log("✅ CONNECTÉ")
