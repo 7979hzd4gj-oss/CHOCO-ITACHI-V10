@@ -1,11 +1,14 @@
 const express=require('express');const app=express();const PORT=process.env.PORT||10000;const QRCode=require('qrcode');
 app.use(express.json());app.use(express.urlencoded({extended:true}));global.lastQR=null;global.sock=null;
-app.get('/',(req,res)=>{res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO V10</title><style>body{background:#000;color:#fff;display:flex;justify-content:center;padding-top:30px;font-family:Arial}.box{width:100%;max-width:360px;padding:0 22px;text-align:center}h1{color:#00ff00;font-size:26px;font-weight:900}#qr{background:#fff;border-radius:18px;padding:14px;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}#qr img{width:100%}input{width:100%;padding:16px;border-radius:12px;border:none;margin-top:20px}button{width:100%;margin-top:18px;padding:17px;background:#00ff00;border:none;border-radius:12px;font-weight:900}</style></head><body><div class="box"><h1>🤖 CHOCO ITACHI V10</h1><h3>261 FINAL DROIT</h3><div id="qr">${global.lastQR?`<img src="${global.lastQR}">`:'Generation...'}</div><form action="/pair" method="post"><input name="number" placeholder="224xxxxxxxxxxx" required><button>GET CODE</button></form></div><script>setTimeout(()=>location.reload(),20000)</script></body></html>`);});
-app.post('/pair',async(req,res)=>{let n=req.body.number.replace(/[^0-9]/g,'');if(!global.sock)return res.send('Bot pas pret <a href="/">Retour</a>');try{let c=await global.sock.requestPairingCode(n);c=c?.match(/.{1,4}/g)?.join("-")||c;res.send(`<h1 style="background:#000;color:#0f0;height:100vh;text-align:center;padding-top:100px">CODE: ${c}<br><a href="/">Retour</a></h1>`);}catch(e){res.send(e.message+' <a href="/">Retour</a>');}});
+app.get('/',(req,res)=>{
+let qrImg = global.lastQR? '<img src="'+global.lastQR+'">' : 'Generation... EN ATTENTE DE QR';
+res.send('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO V10</title><style>body{background:#000;color:#fff;display:flex;justify-content:center;padding-top:30px;font-family:Arial}.box{width:100%;max-width:360px;padding:0 22px;text-align:center}h1{color:#00ff00;font-size:26px;font-weight:900}#qr{background:#fff;border-radius:18px;padding:14px;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}#qr img{width:100%}input{width:100%;padding:16px;border-radius:12px;border:none;margin-top:20px}button{width:100%;margin-top:18px;padding:17px;background:#00ff00;border:none;border-radius:12px;font-weight:900}</style></head><body><div class="box"><h1>🤖 CHOCO ITACHI V10</h1><h3>261 FINAL DROIT</h3><div id="qr">'+qrImg+'</div><form action="/pair" method="post"><input name="number" placeholder="224xxxxxxxxxxx" required><button>GET CODE</button></form></div><script>setTimeout(()=>location.reload(),20000)</script></body></html>');
+});
+app.post('/pair',async(req,res)=>{let n=req.body.number.replace(/[^0-9]/g,'');if(!global.sock)return res.send('Bot pas pret <a href="/">Retour</a>');try{let c=await global.sock.requestPairingCode(n);c=c?.match(/.{1,4}/g)?.join("-")||c;res.send('<h1 style="background:#000;color:#0f0;height:100vh;text-align:center;padding-top:100px">CODE: '+c+'<br><a href="/">Retour</a></h1>');}catch(e){res.send(e.message+' <a href="/">Retour</a>');}});
 app.listen(PORT,()=>console.log('ON '+PORT));
 const fs=require('fs'),pino=require('pino'),axios=require('axios'),yts=require('yt-search'),ytdl=require('@distube/ytdl-core'),config=require('./config.js');
 const {default:makeWASocket,useMultiFileAuthState,DisconnectReason,downloadMediaMessage,makeCacheableSignalKeyStore}=require('@whiskeysockets/baileys');
-let gdb={warnings:{},antilink:config.ANTILINK,antibadword:false,antibot:false,antisticker:false,antifile:false,antivoice:false,welcome:config.WELCOME,goodbye:config.GOODBYE,antileave:false,antimention:false,antitag:false,anticall:false,antidelete:false,antipurge:false,antimarabou:false,antistatut:false,antifake:false,antispam:false,antiviewonce:false,antigroup:false,antishare:false,antiflood:false,antiedit:false,antichannel:false};
+let gdb={warnings:{},antilink:config.ANTILINK,antibadword:false,antibot:false,antisticker:false,antifile:false,antivoice:false,welcome:config.WELCOME,goodbye:config.GOODBYE,antileave:false,antimention:false,antitag:false,anticall:false,antidelete:false,antipurge:false,antimarabou:false,antistatut:false,antifake:false,antispam:false,antiviewonce:false,antigroup:false,antishare:false,antifile:false,antiflood:false,antiedit:false,antichannel:false};
 if(fs.existsSync('./database.json')){try{gdb=JSON.parse(fs.readFileSync('./database.json'));}catch{}}
 const saveDB=()=>fs.writeFileSync('./database.json',JSON.stringify(gdb,null,2));
 const badW=["pute","connard","fdp","fuck","shit"];
@@ -13,11 +16,15 @@ async function startChoco(){
 const {state,saveCreds}=await useMultiFileAuthState(config.SESSION_FOLDER);
 const sock=makeWASocket({auth:{creds:state.creds,keys:makeCacheableSignalKeyStore(state.keys,pino({level:'silent'}))},logger:pino({level:'silent'}),printQRInTerminal:false,browser:["Chrome","Chrome","1.0"]});
 global.sock=sock;sock.ev.on('creds.update',saveCreds);
-sock.ev.on('connection.update',async(u)=>{if(u.qr)QRCode.toDataURL(u.qr,(e,url)=>{if(!e)global.lastQR=url;});if(u.connection=="open")global.lastQR=null;if(u.connection=="close"&&u.lastDisconnect?.error?.output?.statusCode!=DisconnectReason.loggedOut)startChoco();});
+sock.ev.on('connection.update',async(u)=>{if(u.qr)QRCode.toDataURL(u.qr,(e,url)=>{if(!e)global.lastQR=url;});if(u.connection=="open"){global.lastQR=null;console.log("CONNECTE ✅ BOT PRET");}if(u.connection=="close"&&u.lastDisconnect?.error?.output?.statusCode!=DisconnectReason.loggedOut)startChoco();});
 sock.ev.on('messages.upsert',async({messages})=>{
-const m=messages[0];if(!m.message||m.key.fromMe)return;const from=m.key.remoteJid,sender=m.key.participant||from;
-const body=m.message.conversation||m.message.extendedTextMessage?.text||m.message.imageMessage?.caption||"";const isGroup=from.endsWith('@g.us');
-const args=body.trim().split(/ +/).slice(1);const q=args.join(" ");const cmd=body.slice(1).trim().split(/ +/).shift()?.toLowerCase();
+const m=messages[0];if(!m.message) return;
+// FIX 1 : On ne bloque plus fromMe, sinon le proprio ne peut jamais tester
+const from=m.key.remoteJid,sender=m.key.participant||from;
+const body=m.message.conversation||m.message.extendedTextMessage?.text||m.message.imageMessage?.caption||m.message.videoMessage?.caption||"";
+const isGroup=from.endsWith('@g.us');
+console.log("MESSAGE RECU:",body,"FROM:",from,"GROUP:",isGroup);
+const args=body.trim().split(/ +/).slice(1);const q=args.join(" ");const cmd=body.trim().startsWith(config.PREFIX)? body.trim().slice(config.PREFIX.length).trim().split(/ +/).shift()?.toLowerCase() : "";
 const qmsg=m.message.extendedTextMessage?.contextInfo?.quotedMessage;const mention=m.message.extendedTextMessage?.contextInfo?.mentionedJid||[];
 if(isGroup&&!body.startsWith(config.PREFIX)){let meta=await sock.groupMetadata(from).catch(()=>null);let isAdm=meta?.participants.find(p=>p.id==sender)?.admin;
 if(!isAdm){if(gdb.antilink&&/https?:\/\/|chat\.whatsapp\.com/i.test(body)){try{await sock.sendMessage(from,{delete:m.key})}catch{}return;}
@@ -32,67 +39,67 @@ await sock.sendMessage(from,{image:{url:config.BOT_PIC},caption:
 "┏━━━━━━━━━━━━━━━━━━━━┓\n"+
 "┃ CHOCO-V10 261 DROIT┃\n"+
 "┣━━━━━━━━━━━━━━━━━━━━┫\n"+
-"┃ GENERAL 31         ┃\n"+
+"┃ GENERAL 31 ┃\n"+
 "┃ menu help ping alive\n"+
-"┃ uptime owner info  ┃\n"+
+"┃ uptime owner info ┃\n"+
 "┃ botinfo id gjid url┃\n"+
-"┃ weather news fact  ┃\n"+
-"┃ quote joke 8ball   ┃\n"+
+"┃ weather news fact ┃\n"+
+"┃ quote joke 8ball ┃\n"+
 "┃ lyrics trt ss attp ┃\n"+
-"┃ calc qr            ┃\n"+
+"┃ calc qr ┃\n"+
 "┣━━━━━━━━━━━━━━━━━━━━┫\n"+
-"┃ ADMIN 45           ┃\n"+
+"┃ ADMIN 45 ┃\n"+
 "┃ open close ban kick┃\n"+
 "┃ warn promote demote┃\n"+
 "┃ mute unmute delete ┃\n"+
-"┃ clear tagall tag   ┃\n"+
+"┃ clear tagall tag ┃\n"+
 "┃ hidetag add remove ┃\n"+
-"┃ setgname setgpp    ┃\n"+
-"┃ kickall purge      ┃\n"+
-"┃ approve invite     ┃\n"+
-"┃ grouplink revoke   ┃\n"+
-"┃ total sanction     ┃\n"+
+"┃ setgname setgpp ┃\n"+
+"┃ kickall purge ┃\n"+
+"┃ approve invite ┃\n"+
+"┃ grouplink revoke ┃\n"+
+"┃ total sanction ┃\n"+
 "┃ signal gstatus link┃\n"+
-"┃ welcome goodbye    ┃\n"+
+"┃ welcome goodbye ┃\n"+
 "┃ setwelcome setgoodbye\n"+
-"┃ setdesc getdesc    ┃\n"+
-"┃ getgpp admins      ┃\n"+
-"┃ members warnings   ┃\n"+
-"┃ resetwarn poll     ┃\n"+
+"┃ setdesc getdesc ┃\n"+
+"┃ getgpp admins ┃\n"+
+"┃ members warnings ┃\n"+
+"┃ resetwarn poll ┃\n"+
 "┣━━━━━━━━━━━━━━━━━━━━┫\n"+
-"┃ PROTECTION 22      ┃\n"+
+"┃ PROTECTION 22 ┃\n"+
 "┃ antilink antibadword\n"+
-"┃ antibot antileave  ┃\n"+
+"┃ antibot antileave ┃\n"+
 "┃ antimention antisticker\n"+
-"┃ antitag anticall   ┃\n"+
+"┃ antitag anticall ┃\n"+
 "┃ antidelete antipurge\n"+
 "┃ antimarabou antistatut\n"+
-"┃ antifake antispam  ┃\n"+
+"┃ antifake antispam ┃\n"+
 "┃ antiviewonce antigroup\n"+
 "┃ antivoice antifile ┃\n"+
 "┃ antishare antiflood┃\n"+
 "┃ antiedit antichannel\n"+
 "┣━━━━━━━━━━━━━━━━━━━━┫\n"+
-"┃ DOWNLOAD 13        ┃\n"+
-"┃ play song video    ┃\n"+
-"┃ ytmp3 ytmp4 yts    ┃\n"+
-"┃ tiktok insta fb    ┃\n"+
-"┃ mediafire apk      ┃\n"+
-"┃ spotify vv         ┃\n"+
+"┃ DOWNLOAD 13 ┃\n"+
+"┃ play song video ┃\n"+
+"┃ ytmp3 ytmp4 yts ┃\n"+
+"┃ tiktok insta fb ┃\n"+
+"┃ mediafire apk ┃\n"+
+"┃ spotify vv ┃\n"+
 "┣━━━━━━━━━━━━━━━━━━━━┫\n"+
 "┃ STICKER SEARCH FUN ┃\n"+
-"┃ sticker s toimg    ┃\n"+
+"┃ sticker s toimg ┃\n"+
 "┃ toimage emojimix qc┃\n"+
 "┃ google wiki ai gpt ┃\n"+
-"┃ imagine shorturl   ┃\n"+
-"┃ tourl meme ship    ┃\n"+
-"┃ dare truth roll    ┃\n"+
-"┃ slot flirt         ┃\n"+
+"┃ imagine shorturl ┃\n"+
+"┃ tourl meme ship ┃\n"+
+"┃ dare truth roll ┃\n"+
+"┃ slot flirt ┃\n"+
 "┣━━━━━━━━━━━━━━━━━━━━┫\n"+
-"┃ OWNER 6            ┃\n"+
-"┃ eval restart       ┃\n"+
-"┃ broadcast join     ┃\n"+
-"┃ leave banuser      ┃\n"+
+"┃ OWNER 6 ┃\n"+
+"┃ eval restart ┃\n"+
+"┃ broadcast join ┃\n"+
+"┃ leave banuser ┃\n"+
 "┗━━━━━━━━━━━━━━━━━━━━┛\n"+
 "```\n"+
 "261 CMDS ✅ ALL WORK - V10\n"+config.FOOTER
@@ -150,11 +157,11 @@ case "ai":case "gpt":{let r=await axios.get(`https://api.heckerman06.repl.co/api
 case "imagine":await sock.sendMessage(from,{image:{url:`https://image.pollinations.ai/prompt/${encodeURIComponent(q)}`}},{quoted:m});break;
 case "google":await send(`https://google.com/search?q=${encodeURIComponent(q)}`);break;
 case "wiki":{let r=await axios.get(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q)}`).catch(()=>null);await send(r?.data?.extract||"Pas trouvé");break;}
-case "eval":if(sender==config.OWNER_NUMBER+"@s.whatsapp.net"){try{await send(`${await eval(q)}`);}catch(e){await send(`${e}`);}}break;
-case "restart":if(sender==config.OWNER_NUMBER+"@s.whatsapp.net"){await send("RESTART");process.exit(0);}break;
-case "broadcast":case "join":case "leave":case "banuser":if(sender==config.OWNER_NUMBER+"@s.whatsapp.net")await send("OWNER DONE ✅");break;
+case "eval":if(sender==config.OWNER_NUMBER+"@s.whatsapp.net"||m.key.fromMe){try{await send(`${await eval(q)}`);}catch(e){await send(`${e}`);}}break;
+case "restart":if(sender==config.OWNER_NUMBER+"@s.whatsapp.net"||m.key.fromMe){await send("RESTART");process.exit(0);}break;
+case "broadcast":case "join":case "leave":case "banuser":if(sender==config.OWNER_NUMBER+"@s.whatsapp.net"||m.key.fromMe)await send("OWNER DONE ✅");break;
 }
-}catch(e){console.log(e)}
+}catch(e){console.log("ERREUR CMD:",e)}
 });
 }
 startChoco();
