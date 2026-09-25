@@ -1,38 +1,77 @@
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 10000;
-app.get('/', (req, res) => res.send('CHOCO ITACHI V10 ONLINE 🔥'));
-app.listen(PORT, () => console.log('Server on ' + PORT));
+const QRCode = require('qrcode');
+
+app.get('/', (req, res) => {
+  res.send(`
+  <html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>CHOCO V10</title>
+  <style>
+  body{background:#000;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:Arial;margin:0}
+  .box{text-align:center;width:92%;max-width:360px}
+  h1{color:#00ff00} #qr{background:#fff;padding:15px;border-radius:15px;margin:20px 0;min-height:250px;display:flex;justify-content:center;align-items:center}
+  input{padding:15px;width:100%;border-radius:12px;border:none;margin:10px 0;box-sizing:border-box}
+  button{padding:15px;background:#00ff00;color:#000;border:none;border-radius:12px;width:100%;font-weight:bold;font-size:18px}
+  </style></head><body><div class="box">
+  <h1>🤖 CHOCO ITACHI V10</h1><h3>261 CMDS ALIGNÉ</h3>
+  <div id="qr">${global.lastQR ? `<img src="${global.lastQR}" style="width:100%">` : 'Génération QR... recharge dans 20s'}</div>
+  <form action="/pair" method="post"><input name="number" placeholder="224611257942" required><button>GET CODE</button></form>
+  </div><script>setTimeout(()=>location.reload(),20000)</script></body></html>
+  `);
+});
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.post('/pair', async (req,res)=>{
+  let num = req.body.number.replace(/[^0-9]/g,'');
+  try{
+    let code = await global.sock.requestPairingCode(num);
+    res.send(`<h1 style="text-align:center;background:#000;color:#fff;height:100vh;padding-top:50px">CODE: ${code}<br><a href="/" style="color:#0f0">Retour</a></h1>`);
+  }catch(e){ res.send(e.message + ' <a href="/">Retour</a>'); }
+});
+
+app.listen(PORT, ()=> console.log('Server on ' + PORT));
 
 const fs = require('fs');
 const pino = require('pino');
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay } = require('@whiskeysockets/baileys');
 const axios = require('axios');
 const yts = require('yt-search');
-const ytdl = require('@distube/ytdl-core')
+const ytdl = require('@distube/ytdl-core');
+
 let gdb = {
-warnings:{}, banned:[], mode:"public", prefix:".",
-antilink:false, antibadword:false, antibot:false, antileave:false, antimention:false, antisticker:false, antitag:false, anticall:false, antidelete:false, antipurge:false, antimarabou:false, antistatut:false, antifake:false, antispam:false, antiviewonce:false, antigroup:false, antivoice:false, antifile:false, antishare:false, antiflood:false, antiedit:false, antichannel:false,
-welcome:false, goodbye:false, autostatus:false, autoread:false, autotyping:false, autoreact:false, antidemote:false
+  warnings:{}, banned:[], mode:"public", prefix:".",
+  antilink:false, antibadword:false, antibot:false,
+  welcome:false, goodbye:false, autostatus:false
+};
+
+if(fs.existsSync('./database.json')){
+  try{ gdb = JSON.parse(fs.readFileSync('./database.json')); }catch{}
 }
-if(fs.existsSync('./database.json')){ try{gdb=JSON.parse(fs.readFileSync('./database.json'))}catch{} }
-const saveDB = ()=> fs.writeFileSync('./database.json',JSON.stringify(gdb,null,2))
-const OWNER_NUM = "224611257942@s.whatsapp.net"
-const PAIR_NUMBER = "224611257942"
-const badWords = ["pute","connard","fdp","fuck","shit","bitch","merde","enculé"]
+const saveDB = () => fs.writeFileSync('./database.json', JSON.stringify(gdb, null, 2));
+const OWNER_NUM = "224611257942@s.whatsapp.net";
+const PAIR_NUMBER = "224611257942";
+const badWords = ["pute","connard","fdp","fuck","shit","bitch","merde","encule"];
 
 async function startChoco(){
-const { state, saveCreds } = await useMultiFileAuthState('./session')
-const sock = makeWASocket({ auth: state, logger: pino({level:"silent"}), printQRInTerminal:false, browser:["CHOCO-V10","Chrome","1.0"] })
-sock.ev.on('creds.update', saveCreds)
+  const { state, saveCreds } = await useMultiFileAuthState('./session');
+  const sock = makeWASocket({
+    auth: state,
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: false,
+    browser: ["CHOCO V10", "Chrome", "1.0"]
+  });
+  global.sock = sock;
+  sock.ev.on('creds.update', saveCreds);
 
-if(!sock.authState.creds.registered){
-  console.log("⏳ Génération du code pairing...")
-  setTimeout(async()=>{
-    try{
-      let code = await sock.requestPairingCode(PAIR_NUMBER)
-      console.log(`\n┏━━━━━━━━━━━━━━━━━━┓\n┃ 🔑 CODE: ${code}\n┗━━━━━━━━━━━━━━━━━━┛\n`)
-    }catch(e){console.log(e.message)}
+  if(!sock.authState.creds.registered){
+    console.log("⏳ Génération du code pairing...");
+    setTimeout(async()=>{
+      try{
+        let code = await sock.requestPairingCode(PAIR_NUMBER);
+        console.log(`\n┏━━━━━━━━━━━━━━━━┓\n┃ CODE: ${code} ┃\n┗━━━━━━━━━━━━━━━━┛\n`);
+      }catch(e){ console.log(e.message
   },3000)
 }
 
