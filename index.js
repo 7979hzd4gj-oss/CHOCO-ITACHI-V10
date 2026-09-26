@@ -1,118 +1,948 @@
-const express=require('express');const app=express();const PORT=process.env.PORT||10000;const QRCode=require('qrcode');
-app.use(express.json());app.use(express.urlencoded({extended:true}));global.lastQR=null;global.sock=null;
-app.get('/',(req,res)=>{
-let qrImg=global.lastQR?'<img src="'+global.lastQR+'" style="width:320px;height:320px">':'<p>QR en cours... 15s</p>';
-res.send('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHOCO V10</title><style>body{background:#000;color:#fff;display:flex;justify-content:center;padding-top:30px;font-family:Arial}.box{width:360px;text-align:center}h1{color:#00ff00}#qr{background:#fff;border-radius:20px;padding:15px;min-height:320px;display:flex;align-items:center;justify-content:center}input{width:100%;padding:15px;border-radius:10px;border:none;margin-top:20px}button{width:100%;padding:15px;background:#00ff00;border:none;border-radius:10px;font-weight:900;margin-top:15px}</style></head><body><div class="box"><h1>CHOCO V10 - 261</h1><div id="qr">'+qrImg+'</div><form action="/pair" method="post"><input name="number" placeholder="224xxxxxxxxxxx"><button>GET CODE</button></form></div><script>setTimeout(()=>location.reload(),20000)</script></body></html>');
-});
-app.post('/pair',async(req,res)=>{
-let n=(req.body.number||'').replace(/[^0-9]/g,'');if(!global.sock) return res.send('Bot pas pret <a href="/">Retour</a>');
-try{let c=await global.sock.requestPairingCode(n);c=c?.match(/.{1,4}/g)?.join("-")||c;res.send('<h1 style="background:#000;color:#0f0;text-align:center;padding-top:100px">CODE: '+c+'<br><br><a href="/">Retour</a></h1>');}catch(e){res.send(e.message+' <a href="/">Retour</a>');}
-});
-app.listen(PORT,()=>console.log('WEB ON '+PORT));
-const fs=require('fs'),pino=require('pino'),axios=require('axios'),yts=require('yt-search'),ytdl=require('@distube/ytdl-core'),config=require('./config.js');
-const {default:makeWASocket,useMultiFileAuthState,DisconnectReason,downloadMediaMessage,makeCacheableSignalKeyStore}=require('@whiskeysockets/baileys');
-let db={warnings:{},antilink:false,antibadword:false,antibot:false,antisticker:false,antifile:false,antivoice:false,welcome:true,goodbye:true,antileave:false,antimention:false,antitag:false,anticall:false,antidelete:false,antipurge:false,antimarabou:false,antistatut:false,antifake:false,antispam:false,antiviewonce:false,antigroup:false,antishare:false,antiflood:false,antiedit:false,antichannel:false};
-if(fs.existsSync('./database.json')){try{db=JSON.parse(fs.readFileSync('./database.json'))}catch{}}
-const save=()=>fs.writeFileSync('./database.json',JSON.stringify(db,null,2));
-const runtime=(s)=>{s=Number(s);let d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),ss=Math.floor(s%60);return (d>0?d+'j ':'')+h+'h '+m+'m '+ss+'s';};
-const sendChoco=async(sock,from,m,txt)=>{
- try{
-  if(fs.existsSync('./choco.jpg')){
-   await sock.sendMessage(from,{image:fs.readFileSync('./choco.jpg'),caption:"```"+txt+"```"},{quoted:m});
-  } else {
-   await sock.sendMessage(from,{text:"```"+txt+"```"},{quoted:m});
-  }
- }catch{
-  await sock.sendMessage(from,{text:"```"+txt+"```"},{quoted:m});
- }
+import express from "express";
+import QRCode from "qrcode";
+import pino from "pino";
+import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import yts from "yt-search";
+import ytdl from "@distube/ytdl-core";
+import config from "./config.js";
+import {
+  DisconnectReason,
+  makeCacheableSignalKeyStore,
+  makeWASocket,
+  useMultiFileAuthState,
+} from "@whiskeysockets/baileys";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PORT = Number(process.env.PORT ?? 10000);
+const DATABASE_FILE = path.join(__dirname, "database.json");
+const IMAGE_FILE = path.join(__dirname, "choco.jpg");
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
+
+const DEFAULT_DB = {
+  warnings: {},
+  antilink: false,
+  antibadword: false,
+  antibot: false,
+  antisticker: false,
+  antifile: false,
+  antivoice: false,
+  welcome: true,
+  goodbye: true,
+  antileave: false,
+  antimention: false,
+  antitag: false,
+  anticall: false,
+  antidelete: false,
+  antipurge: false,
+  antimarabou: false,
+  antistatut: false,
+  antifake: false,
+  antispam: false,
+  antiviewonce: false,
+  antigroup: false,
+  antishare: false,
+  antiflood: false,
+  antiedit: false,
+  antichannel: false,
 };
-async function start(){
-const {state,saveCreds}=await useMultiFileAuthState(config.SESSION_FOLDER);
-const sock=makeWASocket({auth:{creds:state.creds,keys:makeCacheableSignalKeyStore(state.keys,pino({level:'silent'}))},logger:pino({level:'silent'}),printQRInTerminal:false,browser:["Chrome","Chrome","1.0"]});
-global.sock=sock;
-sock.ev.on('creds.update',saveCreds);
-sock.ev.on('connection.update',async(u)=>{
-if(u.qr) QRCode.toDataURL(u.qr,(e,url)=>{if(!e) global.lastQR=url;});
-if(u.connection=="open"){global.lastQR=null;console.log("CONNECTE OK GLOBAL IMAGE");}
-if(u.connection=="close" && u.lastDisconnect?.error?.output?.statusCode!=DisconnectReason.loggedOut) start();
-});
-sock.ev.on('messages.upsert',async({messages})=>{
-const m=messages[0]; if(!m.message) return;
-const from=m.key.remoteJid; const sender=m.key.participant||from;
-const isGroup=from.endsWith('@g.us');
-const body=m.message.conversation||m.message.extendedTextMessage?.text||m.message.imageMessage?.caption||m.message.videoMessage?.caption||"";
-if(isGroup &&!body.startsWith(config.PREFIX)){
- try{
-  let meta=await sock.groupMetadata(from).catch(()=>null);
-  let isAdm=meta?.participants.find(p=>p.id==sender)?.admin;
-  if(!isAdm){
-   if(db.antilink && /https?:\/\/|chat\.whatsapp\.com|wa\.me/i.test(body)){try{await sock.sendMessage(from,{delete:m.key})}catch{} return;}
-   if(db.antibadword && /pute|connard|fdp|fuck|shit/i.test(body)){try{await sock.sendMessage(from,{delete:m.key})}catch{} return;}
+
+const state = {
+  db: { ...DEFAULT_DB },
+  socket: null,
+  qrDataUrl: null,
+  connected: false,
+  reconnectDelay: 1000,
+  image: null,
+};
+
+let saveQueue = Promise.resolve();
+
+async function loadDatabase() {
+  try {
+    const content = await fs.readFile(DATABASE_FILE, "utf8");
+    state.db = { ...DEFAULT_DB, ...JSON.parse(content) };
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      logger.warn({ err: error }, "Database invalide, réinitialisation");
+    }
   }
- }catch{}
- return;
 }
-if(!body.startsWith(config.PREFIX)) return;
-const cmd=body.slice(config.PREFIX.length).trim().split(/ +/)[0].toLowerCase();
-const q=body.slice(config.PREFIX.length).trim().split(/ +/).slice(1).join(" ");
-const send=async(t)=>await sock.sendMessage(from,{text:t},{quoted:m});
-try{
-switch(cmd){
-case "menu":case "help":{
-let up=runtime(process.uptime());let ram=(process.memoryUsage().heapUsed/1024/1024).toFixed(2);
-let txt="CHOCO-ITACHI V10 - ULTIMATE\n\nBOT INFO\nOwner: CHOCO\nBot: CHOCO-ITACHI\nPrefix: [.]\nMode: public\nUptime: "+up+"\nRam: "+ram+"MB\nCmds: 261\n\n";
-txt+="DOWNLOAD\n- play, song, video, ytmp3, ytmp4, yts, tiktok, insta, fb, mediafire, apk, spotify\n\n";
-txt+="GROUP\n- grouplink, link, revoke, add, kick, ban, promote, demote, open, close, mute, tagall, tag, hidetag, admins, members, warn, poll, kickall\n\n";
-txt+="PROTECTION 22\n- antilink, antibadword, antibot, antisticker, antileave, antimention, antitag, anticall, antidelete, antipurge, antimarabou, antistatut, antifake, antispam, antiviewonce, antigroup, antivoice, antifile, antishare, antiflood, antiedit, antichannel, welcome, goodbye\n\n";
-txt+="OWNER\n- alive, ping, restart, eval, broadcast, join, leave\n\n";
-txt+="FUN / CONVERT / AI\n- ship, joke, fact, flip, roll, sticker, toimg, emojimix, qc, attp, ai, gpt, imagine, google, wiki\n\nPOWERED BY CHOCO-MD";
-await sendChoco(sock,from,m,txt); break;
+
+function saveDatabase() {
+  saveQueue = saveQueue
+    .then(async () => {
+      const temporaryFile = `${DATABASE_FILE}.tmp`;
+
+      await fs.writeFile(
+        temporaryFile,
+        JSON.stringify(state.db, null, 2),
+      );
+
+      await fs.rename(temporaryFile, DATABASE_FILE);
+    })
+    .catch((error) => {
+      logger.error(
+        { err: error },
+        "Impossible de sauvegarder la base",
+      );
+    });
+
+  return saveQueue;
 }
-case "allmenu":{
-let up=runtime(process.uptime());
-let txt="CHOCO V10 - ALLMENU 261\nBOT: CHOCO-ITACHI\nUPTIME: "+up+"\n\n";
-txt+="GENERAL 31\n.ping.alive.uptime.runtime.owner.info.botinfo.id.gjid.weather.news.fact.quote.joke.8ball.lyrics.trt.ss.attp.calc.qr.url.tour.tts.sticker.s.toimg.emojimix.qc.google.wiki.ai.gpt.imagine.meme.ship.dare.truth.roll.flip.flirt\n\n";
-txt+="GROUP 35\n.open.close.ban.kick.warn.promote.demote.mute.unmute.delete.clear.tagall.tag.hidetag.add.link.revoke.setgname.setgpp.setdesc.getdesc.getgpp.admins.members.warnings.resetwarn.poll.kickall.purge\n\n";
-txt+="PROTECTION 22\n.antilink.antibadword.antibot.antisticker.antifile.antivoice.antileave.antimention.antitag.anticall.antidelete.antipurge.antimarabou.antistatut.antifake.antispam.antiviewonce.antigroup.antishare.antiflood.antiedit.antichannel.welcome.goodbye\n\n";
-txt+="DOWNLOAD 13\n.play.song.video.ytmp3.ytmp4.yts.tiktok.insta.fb.mediafire.apk.spotify.vv\n\n";
-txt+="OWNER\n.eval.restart.broadcast.join.leave\n\nTOTAL 261 - POWERED BY CHOCO-MD";
-await sendChoco(sock,from,m,txt); break;
+
+function formatRuntime(seconds) {
+  const total = Number(seconds);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainingSeconds = Math.floor(total % 60);
+
+  return `${days ? `${days}j ` : ""}${hours}h ${minutes}m ${remainingSeconds}s`;
 }
-case "owner":{
-let txt="CHOCO-ITACHI V10 - OWNER\n\nOWNER: CHOCO\nNUM: wa.me/"+config.OWNER_NUMBER+"\nBOT: CHOCO-ITACHI-V10\nSTATUS: ONLINE\nUPTIME: "+runtime(process.uptime())+"\nMODE: Public\nCMDS: 261\n\nCONTACT OWNER POUR AIDE";
-await sendChoco(sock,from,m,txt); break;
+
+function escapeHtml(value = "") {
+  return String(value).replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+      })[character],
+  );
 }
-case "botinfo":case "info":{
-let up=runtime(process.uptime());let ram=(process.memoryUsage().heapUsed/1024/1024).toFixed(2);
-let txt="CHOCO-ITACHI V10 - BOT INFO\n\nNAME: "+config.BOT_NAME+"\nVERSION: 10.0\nOWNER: CHOCO\nNUM: "+config.OWNER_NUMBER+"\nPREFIX: "+config.PREFIX+"\nUPTIME: "+up+"\nRAM: "+ram+"MB\nPLATFORM: linux\nMODE: Public\nCMDS: 261\nSTATUS: ONLINE DROIT\nDATE: "+new Date().toLocaleDateString()+"\nTIME: "+new Date().toLocaleTimeString()+"\n\nPOWERED BY CHOCO-MD";
-await sendChoco(sock,from,m,txt); break;
+
+function page(body) {
+  return `<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="20">
+    <title>CHOCO V10</title>
+
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        padding: 2rem 1rem;
+        display: grid;
+        place-items: start center;
+        background: #090b0f;
+        color: #f4f7f5;
+        font: 16px/1.5 system-ui, -apple-system, sans-serif;
+      }
+
+      .box {
+        width: min(100%, 390px);
+        text-align: center;
+      }
+
+      h1 {
+        color: #38e879;
+        font-size: clamp(1.5rem, 7vw, 2.1rem);
+      }
+
+      .card {
+        padding: 1rem;
+        border: 1px solid #29322d;
+        border-radius: 1.25rem;
+        background: #111713;
+      }
+
+      #qr {
+        min-height: 320px;
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+        border-radius: 1rem;
+        background: #fff;
+        color: #172019;
+      }
+
+      #qr img {
+        width: min(100%, 320px);
+        height: auto;
+        border-radius: .5rem;
+      }
+
+      input,
+      button {
+        width: 100%;
+        min-height: 3rem;
+        margin-top: .8rem;
+        padding: .8rem 1rem;
+        border-radius: .7rem;
+        font: inherit;
+      }
+
+      input {
+        border: 1px solid #46534b;
+        background: #0b0f0c;
+        color: #fff;
+      }
+
+      button {
+        border: 0;
+        background: #38e879;
+        color: #07110a;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      button:hover {
+        filter: brightness(1.08);
+      }
+
+      .muted {
+        color: #aab5ad;
+      }
+
+      .error {
+        color: #ff8d8d;
+      }
+
+      code {
+        color: #38e879;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="box">${body}</main>
+  </body>
+</html>`;
 }
-case "alive":{
-let txt="CHOCO-ITACHI V10 ONLINE\n\nBOT: "+config.BOT_NAME+"\nOWNER: CHOCO\nUPTIME: "+runtime(process.uptime())+"\nSTATUS: ONLINE\nMODE: Public\nCMDS: 261\n\n"+config.FOOTER;
-await sendChoco(sock,from,m,txt); break;
+
+function homePage() {
+  const qr = state.qrDataUrl
+    ? `<img src="${state.qrDataUrl}" alt="QR code de connexion">`
+    : `<p class="muted">${
+        state.connected
+          ? "Bot connecté."
+          : "QR code en cours de génération…"
+      }</p>`;
+
+  return page(`
+    <h1>CHOCO V10 · 261</h1>
+
+    <section class="card">
+      <div id="qr">${qr}</div>
+
+      <form action="/pair" method="post">
+        <label class="muted" for="number">
+          Numéro WhatsApp avec indicatif pays
+        </label>
+
+        <input
+          id="number"
+          name="number"
+          inputmode="numeric"
+          autocomplete="tel"
+          placeholder="224xxxxxxxxxxx"
+          pattern="[0-9 ]{8,20}"
+          required
+        >
+
+        <button type="submit">
+          GÉNÉRER LE CODE
+        </button>
+      </form>
+    </section>
+  `);
 }
-case "ping":{
-let txt="PONG "+(Date.now()-m.messageTimestamp*1000)+"ms\n\nBOT: CHOCO-ITACHI V10\nUPTIME: "+runtime(process.uptime())+"\nSTATUS: FAST";
-await sendChoco(sock,from,m,txt); break;
+
+function unwrapMessage(message) {
+  return (
+    message?.ephemeralMessage?.message ??
+    message?.viewOnceMessage?.message ??
+    message?.documentWithCaptionMessage?.message ??
+    message
+  );
 }
-case "uptime":case "runtime":{
-let txt="UPTIME: "+runtime(process.uptime())+"\n\nBOT: CHOCO-ITACHI V10\nRAM: "+(process.memoryUsage().heapUsed/1024/1024).toFixed(2)+"MB\nSTATUS: ONLINE";
-await sendChoco(sock,from,m,txt); break;
+
+function messageText(message) {
+  const content = unwrapMessage(message);
+
+  return (
+    content?.conversation ??
+    content?.extendedTextMessage?.text ??
+    content?.imageMessage?.caption ??
+    content?.videoMessage?.caption ??
+    ""
+  ).trim();
 }
-case "antilink": db.antilink=!db.antilink; save(); await sendChoco(sock,from,m,"ANTILINK "+(db.antilink?"ON":"OFF")); break;
-case "antibadword": db.antibadword=!db.antibadword; save(); await sendChoco(sock,from,m,"ANTIBADWORD "+(db.antibadword?"ON":"OFF")); break;
-default:
-if(["antibot","antisticker","antileave","antimention","antitag","anticall","antidelete","antipurge","antimarabou","antistatut","antifake","antispam","antiviewonce","antigroup","antivoice","antifile","antishare","antiflood","antiedit","antichannel","welcome","goodbye"].includes(cmd)){
- db[cmd]=!db[cmd]; save(); await sendChoco(sock,from,m,cmd.toUpperCase()+" "+(db[cmd]?"ON":"OFF"));
-} else if(cmd=="play"||cmd=="song"||cmd=="ytmp3"){
- if(!q) return await sendChoco(sock,from,m,"Ex:.play die hard");
- try{let s=await yts(q);let v=s.videos[0];let st=ytdl(v.url,{filter:'audioonly',quality:'highestaudio'});let ch=[];for await(let c of st) ch.push(c);await sock.sendMessage(from,{audio:Buffer.concat(ch),mimetype:'audio/mpeg'},{quoted:m});await sendChoco(sock,from,m,"PLAY: "+v.title);}catch(e){await send("Erreur play: "+e.message)}
-} else {
- await send("Cmd "+cmd+" pas reconnue, tape.menu");
+
+function isAdmin(metadata, sender) {
+  return Boolean(
+    metadata?.participants?.find(
+      (participant) => participant.id === sender,
+    )?.admin,
+  );
 }
-break;
+
+async function sendText(socket, jid, text, quoted) {
+  return socket.sendMessage(
+    jid,
+    { text },
+    { quoted },
+  );
 }
-}catch(e){console.log("ERR",e.message);}
+
+async function sendChoco(socket, jid, quoted, text) {
+  const formatted = `\`\`\`${text}\`\`\``;
+
+  try {
+    if (!state.image && existsSync(IMAGE_FILE)) {
+      state.image = await fs.readFile(IMAGE_FILE);
+    }
+
+    if (state.image) {
+      return await socket.sendMessage(
+        jid,
+        {
+          image: state.image,
+          caption: formatted,
+        },
+        { quoted },
+      );
+    }
+
+    return await sendText(
+      socket,
+      jid,
+      formatted,
+      quoted,
+    );
+  } catch (error) {
+    logger.warn(
+      { err: error },
+      "Envoi illustré impossible, fallback texte",
+    );
+
+    return sendText(
+      socket,
+      jid,
+      formatted,
+      quoted,
+    );
+  }
+}
+
+async function streamToBuffer(
+  stream,
+  maxBytes = 25 * 1024 * 1024,
+) {
+  const chunks = [];
+  let size = 0;
+
+  for await (const chunk of stream) {
+    size += chunk.length;
+
+    if (size > maxBytes) {
+      stream.destroy();
+      throw new Error(
+        "Le fichier audio dépasse la limite de 25 Mo.",
+      );
+    }
+
+    chunks.push(chunk);
+  }
+
+  return Buffer.concat(chunks);
+}
+
+async function playAudio(socket, jid, quoted, query) {
+  if (!query) {
+    return sendChoco(
+      socket,
+      jid,
+      quoted,
+      "Exemple : .play Die Hard",
+    );
+  }
+
+  const results = await yts(query);
+  const video = results.videos.at(0);
+
+  if (!video?.url) {
+    throw new Error("Aucun résultat trouvé.");
+  }
+
+  const stream = ytdl(video.url, {
+    filter: "audioonly",
+    quality: "highestaudio",
+  });
+
+  const audio = await streamToBuffer(stream);
+
+  await socket.sendMessage(
+    jid,
+    {
+      audio,
+      mimetype: "audio/mpeg",
+      fileName: `${video.title}.mp3`,
+    },
+    { quoted },
+  );
+
+  return sendChoco(
+    socket,
+    jid,
+    quoted,
+    `PLAY : ${video.title}`,
+  );
+}
+
+async function handleProtection(
+  socket,
+  message,
+  from,
+  sender,
+  body,
+) {
+  if (
+    !from.endsWith("@g.us") ||
+    body.startsWith(config.PREFIX)
+  ) {
+    return false;
+  }
+
+  try {
+    const metadata = await socket.groupMetadata(from);
+
+    if (isAdmin(metadata, sender)) {
+      return false;
+    }
+
+    const shouldDelete =
+      (
+        state.db.antilink &&
+        /https?:\/\/|chat\.whatsapp\.com|wa\.me/i.test(body)
+      ) ||
+      (
+        state.db.antibadword &&
+        /pute|connard|fdp|fuck|shit/i.test(body)
+      );
+
+    if (shouldDelete) {
+      await socket.sendMessage(
+        from,
+        { delete: message.key },
+      );
+
+      return true;
+    }
+  } catch (error) {
+    logger.debug(
+      { err: error },
+      "Protection de groupe indisponible",
+    );
+  }
+
+  return true;
+}
+
+async function handleMessage(socket, message) {
+  const content = unwrapMessage(message.message);
+
+  if (!content) return;
+
+  const from = message.key.remoteJid;
+
+  if (!from) return;
+
+  const sender = message.key.participant ?? from;
+  const body = messageText(content);
+
+  if (
+    await handleProtection(
+      socket,
+      message,
+      from,
+      sender,
+      body,
+    )
+  ) {
+    return;
+  }
+
+  if (!body.startsWith(config.PREFIX)) {
+    return;
+  }
+
+  const parts = body
+    .slice(config.PREFIX.length)
+    .trim()
+    .split(/\s+/);
+
+  const command = parts.shift()?.toLowerCase();
+  const query = parts.join(" ");
+
+  const send = (text) =>
+    sendText(
+      socket,
+      from,
+      text,
+      message,
+    );
+
+  try {
+    switch (command) {
+      case "menu":
+      case "help": {
+        const memory = (
+          process.memoryUsage().heapUsed /
+          1024 /
+          1024
+        ).toFixed(2);
+
+        const text = `CHOCO-ITACHI V10 - ULTIMATE
+
+BOT INFO
+Owner: CHOCO
+Bot: CHOCO-ITACHI
+Prefix: ${config.PREFIX}
+Mode: public
+Uptime: ${formatRuntime(process.uptime())}
+RAM: ${memory} MB
+Cmds: 261
+
+DOWNLOAD
+- play, song, video, ytmp3, ytmp4, yts, tiktok, insta, fb, mediafire, apk, spotify
+
+GROUP
+- grouplink, link, revoke, add, kick, ban, promote, demote, open, close, mute, tagall, tag, hidetag, admins, members, warn, poll, kickall
+
+PROTECTION
+- antilink, antibadword, antibot, antisticker, antileave, antimention, antitag, anticall, antidelete, antipurge, antimarabou, antistatut, antifake, antispam, antiviewonce, antigroup, antivoice, antifile, antishare, antiflood, antiedit, antichannel, welcome, goodbye
+
+OWNER
+- alive, ping, restart, eval, broadcast, join, leave
+
+FUN / CONVERT / AI
+- ship, joke, fact, flip, roll, sticker, toimg, emojimix, qc, attp, ai, gpt, imagine, google, wiki`;
+
+        return sendChoco(
+          socket,
+          from,
+          message,
+          text,
+        );
+      }
+
+      case "owner":
+        return sendChoco(
+          socket,
+          from,
+          message,
+          `CHOCO-ITACHI V10 - OWNER
+
+OWNER: CHOCO
+NUM: wa.me/${config.OWNER_NUMBER}
+BOT: CHOCO-ITACHI-V10
+STATUS: ONLINE
+UPTIME: ${formatRuntime(process.uptime())}
+MODE: Public
+CMDS: 261`,
+        );
+
+      case "botinfo":
+      case "info": {
+        const now = new Date();
+
+        const memory = (
+          process.memoryUsage().heapUsed /
+          1024 /
+          1024
+        ).toFixed(2);
+
+        return sendChoco(
+          socket,
+          from,
+          message,
+          `CHOCO-ITACHI V10 - BOT INFO
+
+NAME: ${config.BOT_NAME}
+VERSION: 10.0
+OWNER: CHOCO
+NUM: ${config.OWNER_NUMBER}
+PREFIX: ${config.PREFIX}
+UPTIME: ${formatRuntime(process.uptime())}
+RAM: ${memory} MB
+PLATFORM: ${process.platform}
+MODE: Public
+STATUS: ONLINE
+DATE: ${now.toLocaleDateString("fr-FR")}
+HEURE: ${now.toLocaleTimeString("fr-FR")}`,
+        );
+      }
+
+      case "alive":
+        return sendChoco(
+          socket,
+          from,
+          message,
+          `CHOCO-ITACHI V10 ONLINE
+
+BOT: ${config.BOT_NAME}
+OWNER: CHOCO
+UPTIME: ${formatRuntime(process.uptime())}
+STATUS: ONLINE
+MODE: Public
+CMDS: 261
+
+${config.FOOTER}`,
+        );
+
+      case "ping": {
+        const timestamp =
+          Number(message.messageTimestamp ?? 0) * 1000;
+
+        const latency = timestamp
+          ? `${Date.now() - timestamp}ms`
+          : "n/a";
+
+        return sendChoco(
+          socket,
+          from,
+          message,
+          `PONG ${latency}
+
+BOT: CHOCO-ITACHI V10
+UPTIME: ${formatRuntime(process.uptime())}
+STATUS: FAST`,
+        );
+      }
+
+      case "uptime":
+      case "runtime":
+        return sendChoco(
+          socket,
+          from,
+          message,
+          `UPTIME: ${formatRuntime(process.uptime())}
+
+BOT: CHOCO-ITACHI V10
+RAM: ${(
+            process.memoryUsage().heapUsed /
+            1024 /
+            1024
+          ).toFixed(2)} MB
+STATUS: ONLINE`,
+        );
+
+      case "antilink":
+      case "antibadword":
+      case "antibot":
+      case "antisticker":
+      case "antileave":
+      case "antimention":
+      case "antitag":
+      case "anticall":
+      case "antidelete":
+      case "antipurge":
+      case "antimarabou":
+      case "antistatut":
+      case "antifake":
+      case "antispam":
+      case "antiviewonce":
+      case "antigroup":
+      case "antivoice":
+      case "antifile":
+      case "antishare":
+      case "antiflood":
+      case "antiedit":
+      case "antichannel":
+      case "welcome":
+      case "goodbye": {
+        state.db[command] = !state.db[command];
+
+        await saveDatabase();
+
+        return sendChoco(
+          socket,
+          from,
+          message,
+          `${command.toUpperCase()} ${
+            state.db[command] ? "ON" : "OFF"
+          }`,
+        );
+      }
+
+      case "play":
+      case "song":
+      case "ytmp3":
+        return playAudio(
+          socket,
+          from,
+          message,
+          query,
+        );
+
+      default:
+        return send(
+          `Commande "${command}" inconnue. Tape ${config.PREFIX}menu`,
+        );
+    }
+  } catch (error) {
+    logger.error(
+      { err: error, command },
+      "Erreur pendant le traitement",
+    );
+
+    return send(
+      `Erreur ${command ?? "commande"} : ${error.message}`,
+    );
+  }
+}
+
+async function startBot() {
+  const {
+    state: authState,
+    saveCreds,
+  } = await useMultiFileAuthState(
+    config.SESSION_FOLDER,
+  );
+
+  const socket = makeWASocket({
+    auth: {
+      creds: authState.creds,
+      keys: makeCacheableSignalKeyStore(
+        authState.keys,
+        pino({ level: "silent" }),
+      ),
+    },
+    logger: pino({ level: "silent" }),
+    printQRInTerminal: false,
+    browser: ["Chrome", "Desktop", "1.0.0"],
+  });
+
+  state.socket = socket;
+
+  socket.ev.on(
+    "creds.update",
+    saveCreds,
+  );
+
+  socket.ev.on(
+    "connection.update",
+    async ({
+      connection,
+      lastDisconnect,
+      qr,
+    }) => {
+      if (qr) {
+        state.qrDataUrl = await QRCode.toDataURL(qr);
+        state.connected = false;
+
+        logger.info(
+          "Nouveau QR code disponible sur la page web",
+        );
+      }
+
+      if (connection === "open") {
+        state.connected = true;
+        state.qrDataUrl = null;
+        state.reconnectDelay = 1000;
+
+        logger.info("WhatsApp connecté");
+      }
+
+      if (connection === "close") {
+        state.connected = false;
+        state.socket = null;
+
+        const statusCode =
+          lastDisconnect?.error?.output?.statusCode;
+
+        const loggedOut =
+          statusCode === DisconnectReason.loggedOut;
+
+        if (loggedOut) {
+          logger.error(
+            "Session déconnectée. Supprime le dossier de session avant de relancer.",
+          );
+
+          return;
+        }
+
+        const delay = state.reconnectDelay;
+
+        state.reconnectDelay = Math.min(
+          state.reconnectDelay * 2,
+          30000,
+        );
+
+        logger.warn(
+          { delay },
+          "Connexion fermée, reconnexion programmée",
+        );
+
+        setTimeout(
+          () =>
+            startBot().catch((error) =>
+              logger.error(
+                { err: error },
+                "Reconnexion impossible",
+              ),
+            ),
+          delay,
+        );
+      }
+    },
+  );
+
+  socket.ev.on(
+    "messages.upsert",
+    async ({ messages }) => {
+      for (const message of messages) {
+        if (!message.message || message.key.fromMe) {
+          continue;
+        }
+
+        await handleMessage(socket, message);
+      }
+    },
+  );
+}
+
+const app = express();
+
+app.disable("x-powered-by");
+
+app.use(
+  express.urlencoded({
+    extended: false,
+    limit: "32kb",
+  }),
+);
+
+app.use(
+  express.json({
+    limit: "32kb",
+  }),
+);
+
+app.get("/", (_request, response) => {
+  response
+    .type("html")
+    .send(homePage());
 });
+
+app.post("/pair", async (request, response) => {
+  const number = String(
+    request.body.number ?? "",
+  ).replace(/\D/g, "");
+
+  if (!/^\d{8,15}$/.test(number)) {
+    return response
+      .status(400)
+      .type("html")
+      .send(
+        page(`
+          <p class="error">Numéro invalide.</p>
+          <p><a href="/">Retour</a></p>
+        `),
+      );
+  }
+
+  // Le code de jumelage peut être demandé pendant la connexion.
+  if (!state.socket) {
+    return response
+      .status(503)
+      .type("html")
+      .send(
+        page(`
+          <p class="error">
+            Le bot est encore en cours d'initialisation.
+          </p>
+          <p><a href="/">Retour</a></p>
+        `),
+      );
+  }
+
+  try {
+    const pairingCode =
+      await state.socket.requestPairingCode(number);
+
+    const formattedCode =
+      pairingCode
+        ?.match(/.{1,4}/g)
+        ?.join("-") ?? pairingCode;
+
+    return response
+      .type("html")
+      .send(
+        page(`
+          <h1>Code de connexion</h1>
+
+          <section class="card">
+            <p>Entre ce code dans WhatsApp :</p>
+            <h2>
+              <code>${escapeHtml(formattedCode)}</code>
+            </h2>
+            <p><a href="/">Retour</a></p>
+          </section>
+        `),
+      );
+  } catch (error) {
+    logger.error(
+      { err: error },
+      "Impossible de générer le code",
+    );
+
+    return response
+      .status(500)
+      .type("html")
+      .send(
+        page(`
+          <p class="error">
+            Impossible de générer le code.
+          </p>
+          <p><a href="/">Retour</a></p>
+        `),
+      );
+  }
+});
+
+await loadDatabase();
+
+app.listen(PORT, () => {
+  logger.info(
+    `Interface web active sur le port ${PORT}`,
+  );
+});
+
+startBot().catch((error) => {
+  logger.error(
+    { err: error },
+    "Démarrage du bot impossible",
+  );
+});
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, async () => {
+    logger.info({ signal }, "Arrêt du bot");
+
+    state.socket?.end?.(
+      new Error("Arrêt du processus"),
+    );
+
+    await saveQueue;
+    process.exit(0);
+  });
 }
-start();
