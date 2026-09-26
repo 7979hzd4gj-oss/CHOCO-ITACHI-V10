@@ -9,6 +9,7 @@ import yts from "yt-search";
 import ytdl from "@distube/ytdl-core";
 import config from "./config.js";
 import { handleGroupCommand } from "./group-commands.js";
+import { createMenuText } from "./menu.js";
 import {
   DisconnectReason,
   makeCacheableSignalKeyStore,
@@ -322,32 +323,11 @@ async function handleMessage(socket, message) {
     switch (command) {
       case "menu":
       case "help": {
-        const memory = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
-        const text = `CHOCO-ITACHI V10 - ULTIMATE
-
-BOT INFO
-Owner: CHOCO
-Bot: CHOCO-ITACHI
-Prefix: ${config.PREFIX}
-Mode: public
-Uptime: ${formatRuntime(process.uptime())}
-RAM: ${memory} MB
-Commandes actives : groupe, protection, utilitaires
-
-DOWNLOAD
-- play, song, video, ytmp3, ytmp4, yts, tiktok, insta, fb, mediafire, apk, spotify
-
-GROUP
-- groupinfo, admins, members, tagall, hidetag, open, close, add, kick, promote, demote, warn, warnings, resetwarn, grouplink, revoke, setgname, setdesc, getdesc, delete, poll
-
-PROTECTION
-- antilink, antibadword, antibot, antisticker, antileave, antimention, antitag, anticall, antidelete, antipurge, antimarabou, antistatut, antifake, antispam, antiviewonce, antigroup, antivoice, antifile, antishare, antiflood, antiedit, antichannel, welcome, goodbye
-
-OWNER
-- alive, ping, restart, eval, broadcast, join, leave
-
-FUN / CONVERT / AI
-- ship, joke, fact, flip, roll, sticker, toimg, emojimix, qc, attp, ai, gpt, imagine, google, wiki`;
+        const text = createMenuText({
+          prefix: config.PREFIX,
+          botName: config.BOT_NAME ?? "CHOCO ITACHI V10",
+          uptimeSeconds: process.uptime(),
+        });
         return sendChoco(socket, from, message, text);
       }
 
